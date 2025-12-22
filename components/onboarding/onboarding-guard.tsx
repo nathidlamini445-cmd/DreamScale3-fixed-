@@ -1,0 +1,134 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
+import { useSessionSafe } from '@/lib/session-context'
+import { IntegratedOnboarding } from './integrated-onboarding'
+
+interface OnboardingGuardProps {
+  children: React.ReactNode
+}
+
+export function OnboardingGuard({ children }: OnboardingGuardProps) {
+  const sessionContext = useSessionSafe()
+  const [mounted, setMounted] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [isChecking, setIsChecking] = useState(true)
+  const [showWhiteScreen, setShowWhiteScreen] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Check onboarding status from both session context and localStorage
+  useEffect(() => {
+    if (!mounted) return
+
+    setIsChecking(true)
+
+    // First, check session context
+    const sessionCompleted = sessionContext?.sessionData?.entrepreneurProfile?.onboardingCompleted
+
+    // Also check localStorage directly as a fallback (in case session hasn't loaded yet)
+    let localStorageCompleted = false
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('dreamscale_session')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          localStorageCompleted = parsed?.entrepreneurProfile?.onboardingCompleted === true
+        }
+      }
+    } catch (error) {
+      console.error('Error checking localStorage for onboarding status:', error)
+    }
+
+    // Only show onboarding if BOTH checks confirm it's NOT completed
+    // If either source says it's completed, skip onboarding
+    const isCompleted = sessionCompleted === true || localStorageCompleted === true
+    
+    console.log('🔍 Onboarding check:', {
+      sessionCompleted,
+      localStorageCompleted,
+      isCompleted,
+      willShowOnboarding: !isCompleted
+    })
+
+    setShowOnboarding(!isCompleted)
+    setIsChecking(false)
+  }, [mounted, sessionContext, sessionContext?.sessionData?.entrepreneurProfile?.onboardingCompleted])
+
+  const handleOnboardingComplete = () => {
+    // Close onboarding and show white screen for 8 seconds
+    setShowOnboarding(false)
+    setShowWhiteScreen(true)
+    
+    // After 8 seconds, hide white screen and show the app
+    setTimeout(() => {
+      setShowWhiteScreen(false)
+    }, 8000) // 8 seconds
+  }
+
+  // Show loading while checking
+  if (!mounted || isChecking) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  // Show onboarding ONLY if not completed
+  if (showOnboarding) {
+    return (
+      <IntegratedOnboarding 
+        isOpen={true} 
+        onClose={handleOnboardingComplete}
+      />
+    )
+  }
+
+  // Show white screen with welcoming message for 8 seconds after submitting answers
+  if (showWhiteScreen) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-white dark:bg-[#1a1a1a] flex items-center justify-center">
+        <div className="text-center px-4 max-w-xl">
+          {/* Logo - Minimalistic but larger */}
+          <div className="flex justify-center mb-12">
+            <div className="relative w-24 h-24 opacity-60">
+              <Image
+                src="/Logo.png"
+                alt="DreamScale Logo"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
+          </div>
+
+          {/* Welcome Message - Notion-style minimalistic but bigger */}
+          <div className="space-y-4 mb-12">
+            <h1 className="text-5xl font-normal tracking-normal text-[#37352f] dark:text-[#e9e9e7] leading-tight">
+              Welcome to DreamScale
+            </h1>
+            <p className="text-xl text-[#787774] dark:text-[#9b9a97] font-normal leading-relaxed">
+              Let's make your dreams come true
+            </p>
+          </div>
+
+          {/* Loading Indicator - Subtle and minimal but larger */}
+          <div className="flex justify-center">
+            <div className="relative w-8 h-8">
+              <div className="absolute inset-0 border-2 border-[#e9e9e9] dark:border-[#37352f] rounded-full"></div>
+              <div className="absolute inset-0 border-2 border-transparent border-t-[#37352f] dark:border-t-[#e9e9e7] rounded-full animate-spin"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // User has completed onboarding - show the app
+  return <>{children}</>
+}
+
