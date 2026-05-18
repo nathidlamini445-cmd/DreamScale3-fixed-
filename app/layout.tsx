@@ -1,0 +1,133 @@
+import type { Metadata } from 'next'
+import dynamic from 'next/dynamic'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
+import { ThemeProvider } from '@/components/theme-provider'
+import { SessionProvider } from '@/lib/session-context'
+import { LanguageProvider } from '@/lib/language-context'
+import { BizoraLoadingProvider } from '@/lib/bizora-loading-context'
+import { ClerkProvider } from '@clerk/nextjs'
+import { RouteGuard } from '@/components/auth/route-guard'
+import { AppWrapper } from '@/components/onboarding/app-wrapper'
+import { MobileBlocker } from '@/components/mobile-blocker'
+import './globals.css'
+
+const Analytics = dynamic(
+  () => import('@vercel/analytics/next').then((m) => ({ default: m.Analytics })),
+  { ssr: false, loading: () => null }
+)
+
+const Toaster = dynamic(
+  () => import('@/components/ui/sonner').then((m) => ({ default: m.Toaster })),
+  { ssr: false, loading: () => null }
+)
+
+const BizoraLoadingOverlayWrapper = dynamic(
+  () =>
+    import('@/components/bizora-loading-wrapper').then((m) => ({
+      default: m.BizoraLoadingOverlayWrapper,
+    })),
+  { ssr: false, loading: () => null }
+)
+
+export const metadata: Metadata = {
+  title: 'DreamScale – Built for Visionaries',
+  description: 'Your AI-powered business platform for building, scaling, and growing your business. Transform your vision into reality with DreamScale.',
+  generator: 'DreamScale',
+  keywords: ['AI business platform', 'entrepreneur tools', 'business scaling', 'AI-powered productivity', 'DreamScale'],
+  authors: [{ name: 'DreamScale Team' }],
+  creator: 'DreamScale',
+  publisher: 'DreamScale',
+  icons: {
+    icon: [
+      { url: '/Logo.png', type: 'image/png', sizes: '32x32' },
+      { url: '/Logo.png', type: 'image/png', sizes: '16x16' },
+    ],
+    shortcut: '/Logo.png',
+    apple: '/Logo.png',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://dreamscale.com',
+    siteName: 'DreamScale',
+    title: 'DreamScale – Built for Visionaries',
+    description: 'Your AI-powered business platform for building, scaling, and growing your business. Transform your vision into reality with DreamScale.',
+    images: [
+      {
+        url: '/Logo.png',
+        width: 1200,
+        height: 630,
+        alt: 'DreamScale – Built for Visionaries',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'DreamScale – Built for Visionaries',
+    description: 'Your AI-powered business platform for building, scaling, and growing your business. Transform your vision into reality with DreamScale.',
+    images: ['/Logo.png'],
+    creator: '@dreamscale',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  verification: {
+    // Add your verification codes here when available
+    // google: 'your-google-verification-code',
+    // yandex: 'your-yandex-verification-code',
+  },
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <ClerkProvider
+      signInUrl="/login"
+      signUpUrl="/signup"
+      signInFallbackRedirectUrl="/auth/resolve"
+      signUpFallbackRedirectUrl="/onboarding"
+    >
+      <html lang="en" suppressHydrationWarning>
+        <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
+          <SessionProvider>
+            <LanguageProvider>
+              <BizoraLoadingProvider>
+                <ThemeProvider
+                  attribute="class"
+                  defaultTheme="light"
+                  enableSystem
+                  disableTransitionOnChange
+                >
+                  <RouteGuard>
+                    <MobileBlocker>
+                      <div className="page-transition">
+                        <AppWrapper>
+                          {children}
+                        </AppWrapper>
+                        <Analytics />
+                        <Toaster />
+                      </div>
+                    </MobileBlocker>
+                  </RouteGuard>
+                </ThemeProvider>
+                <BizoraLoadingOverlayWrapper />
+              </BizoraLoadingProvider>
+            </LanguageProvider>
+          </SessionProvider>
+        </body>
+      </html>
+    </ClerkProvider>
+  )
+}
