@@ -1,0 +1,83 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
+import { isAuthEntryPath } from '@/lib/public-routes'
+
+/**
+ * RouteGuard - PASSIVE component that only shows loading states
+ *
+ * CRITICAL: This component NO LONGER makes routing decisions or redirects.
+ * Auth-based routing is handled by Clerk middleware and /auth/resolve.
+ *
+ * This component only:
+ * - Shows loading state while Clerk user is resolving
+ * - Allows access to public routes
+ * - Renders children when ready
+ */
+export function RouteGuard({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const { isLoaded } = useUser()
+  const loading = !isLoaded
+  const authResolved = isLoaded
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasTimedOut, setHasTimedOut] = useState(false)
+
+  // Public routes: skip global auth loading gate (Clerk /login/* and /signup/* included).
+  const isPublicRoute = isAuthEntryPath(pathname)
+
+  useEffect(() => {
+    // CRITICAL: For public routes, never show loading - render immediately
+    if (isPublicRoute) {
+      setIsLoading(false)
+      setHasTimedOut(false)
+      return
+    }
+
+    // Timeout after 2 seconds - don't block forever
+    const timeout = setTimeout(() => {
+      console.warn('⚠️ [RouteGuard] Auth check timed out - allowing content to render')
+      setHasTimedOut(true)
+      setIsLoading(false)
+    }, 2000)
+
+    // Only show loading while auth is resolving (for protected routes only)
+    if (loading || !authResolved) {
+      setIsLoading(true)
+    } else {
+      // Small delay for smooth transition
+      const timer = setTimeout(() => {
+        setIsLoading(false)
+      }, 100)
+      clearTimeout(timeout)
+      return () => clearTimeout(timer)
+    }
+
+    return () => clearTimeout(timeout)
+  }, [loading, authResolved, isPublicRoute])
+
+  // CRITICAL: Never block public routes - render immediately
+  if (isPublicRoute) {
+    return <>{children}</>
+  }
+
+  // Show loading state only for protected routes (and not timed out)
+  if (isLoading && !hasTimedOut) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center transition-opacity duration-200">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-[#005DFF] border-t-transparent"></div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 animate-pulse">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If timed out, render children anyway (don't block forever)
+  if (hasTimedOut) {
+    return <>{children}</>
+  }
+
+  return <>{children}</>
+}
