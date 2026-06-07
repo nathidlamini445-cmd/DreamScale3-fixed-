@@ -5,6 +5,7 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { chatSchema } from '@/lib/validations'
 import { auth } from '@clerk/nextjs/server'
 import { assertChatAllowed, recordChatSuccess } from '@/lib/usage-quota/guard'
+import { getCoachingStylePrompt } from '@/lib/bizora/coaching-styles'
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +31,19 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    const { message, conversationHistory = [], isResearch = false, fileContent, fileAttachments, userProfile: clientUserProfile, dailyMood, hobbies, favoriteSong, userId } = parsed.data
+    const {
+      message,
+      conversationHistory = [],
+      isResearch = false,
+      coachingStyle = 'balanced',
+      fileContent,
+      fileAttachments,
+      userProfile: clientUserProfile,
+      dailyMood,
+      hobbies,
+      favoriteSong,
+      userId,
+    } = parsed.data
     
     let userProfile = clientUserProfile
     
@@ -218,7 +231,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const systemPrompt = `You are Bizora AI, an expert business consultant who provides comprehensive, in-depth analysis.${personalizationContext}
+    const coachingStylePrompt = getCoachingStylePrompt(coachingStyle)
+
+    if (process.env.NODE_ENV === 'development' && coachingStyle !== 'balanced') {
+      console.log('[Bizora chat] coaching style:', coachingStyle)
+    }
+
+    const systemPrompt = `You are Bizora AI, an expert business consultant who provides comprehensive, in-depth analysis.${personalizationContext}${coachingStylePrompt}
 
 CRITICAL MEMORY INSTRUCTIONS:
 - You have access to the FULL conversation history with this user

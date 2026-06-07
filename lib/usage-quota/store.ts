@@ -6,6 +6,7 @@ import {
 } from './store-errors'
 import {
   CHAT_COOLDOWN_MS,
+  CHAT_INACTIVITY_RESET_MS,
   CHAT_MESSAGES_PER_CYCLE,
   MONTHLY_FEATURE_LIMIT,
   MONTHLY_UPLOAD_LIMIT,
@@ -23,6 +24,7 @@ export function emptyUsage(): FreeUsageRecord {
     period: currentPeriod(),
     chat_messages_used: 0,
     chat_cooldown_until: null,
+    chat_last_activity_at: null,
     bizora_uploads: 0,
     systems: 0,
     revenue: 0,
@@ -43,6 +45,10 @@ export function normalizeUsage(raw: unknown): FreeUsageRecord {
       typeof o.chat_messages_used === 'number' ? o.chat_messages_used : 0,
     chat_cooldown_until:
       typeof o.chat_cooldown_until === 'string' ? o.chat_cooldown_until : null,
+    chat_last_activity_at:
+      typeof o.chat_last_activity_at === 'string'
+        ? o.chat_last_activity_at
+        : null,
     bizora_uploads: typeof o.bizora_uploads === 'number' ? o.bizora_uploads : 0,
     systems: typeof o.systems === 'number' ? o.systems : 0,
     revenue: typeof o.revenue === 'number' ? o.revenue : 0,
@@ -62,16 +68,30 @@ export function normalizeUsage(raw: unknown): FreeUsageRecord {
   return out
 }
 
-/** Reset chat cycle after cooldown expires. */
-export function refreshChatCycle(usage: FreeUsageRecord, now = Date.now()): FreeUsageRecord {
-  if (!usage.chat_cooldown_until) return usage
-  const until = new Date(usage.chat_cooldown_until).getTime()
-  if (until > now) return usage
+function resetChatQuota(usage: FreeUsageRecord): FreeUsageRecord {
   return {
     ...usage,
     chat_messages_used: 0,
     chat_cooldown_until: null,
   }
+}
+
+/** Reset after 6h inactivity or when cooldown expires. */
+export function refreshChatCycle(usage: FreeUsageRecord, now = Date.now()): FreeUsageRecord {
+  if (usage.chat_last_activity_at) {
+    const last = new Date(usage.chat_last_activity_at).getTime()
+    if (
+      !Number.isNaN(last) &&
+      now - last >= CHAT_INACTIVITY_RESET_MS
+    ) {
+      return resetChatQuota(usage)
+    }
+  }
+
+  if (!usage.chat_cooldown_until) return usage
+  const until = new Date(usage.chat_cooldown_until).getTime()
+  if (until > now) return usage
+  return resetChatQuota(usage)
 }
 
 async function ensureProfileRow(userId: string): Promise<boolean> {
@@ -190,7 +210,11 @@ export function isChatBlocked(usage: FreeUsageRecord, now = Date.now()): boolean
 
 export function consumeChatMessage(usage: FreeUsageRecord, now = Date.now()): FreeUsageRecord {
   let u = refreshChatCycle(usage, now)
-  u = { ...u, chat_messages_used: u.chat_messages_used + 1 }
+  u = {
+    ...u,
+    chat_messages_used: u.chat_messages_used + 1,
+    chat_last_activity_at: new Date(now).toISOString(),
+  }
   if (u.chat_messages_used >= CHAT_MESSAGES_PER_CYCLE) {
     u = {
       ...u,

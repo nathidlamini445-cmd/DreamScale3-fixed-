@@ -7,7 +7,8 @@ import { useBizoraLoading } from "@/lib/bizora-loading-context"
 import * as supabaseData from "@/lib/supabase-data"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { AIResponse } from "@/components/ai-response"
+import { StreamingAIMessage } from "@/components/bizora/streaming-ai-message"
+import { Source_Serif_4 } from "next/font/google"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -44,6 +45,11 @@ import { ShareModal } from "@/components/share-modal"
 import { VoiceWaveform } from "@/components/bizora/voice-waveform"
 import { ChatQuotaBanner } from "@/components/bizora/chat-quota-banner"
 import { ChatLimitReached } from "@/components/bizora/chat-limit-reached"
+import { ComposerAttachMenu } from "@/components/bizora/composer-attach-menu"
+import {
+  isCoachingStyleId,
+  type CoachingStyleId,
+} from "@/lib/bizora/coaching-styles"
 import { chatLimitPlaceholder } from "@/lib/usage-quota/format-chat-resume"
 import { useUsageQuota } from "@/hooks/use-usage-quota"
 import {
@@ -195,6 +201,24 @@ interface Message {
   attachments?: Attachment[]
 }
 
+/** Loaded history must never replay the typing animation. */
+function deserializeMessage(msg: any): Message {
+  const { animateReveal: _drop, ...rest } = msg ?? {}
+  return {
+    ...rest,
+    timestamp:
+      typeof rest.timestamp === 'string'
+        ? new Date(rest.timestamp)
+        : rest.timestamp,
+  }
+}
+
+const bizoraSerif = Source_Serif_4({
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  display: 'swap',
+})
+
 interface Attachment {
   id: string
   name: string
@@ -232,6 +256,10 @@ export default function BizoraAIPage() {
   const router = useRouter()
   const [currentMessage, setCurrentMessage] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
+  /** Only the latest incoming AI reply plays the typing animation once. */
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
+    null
+  )
   const [isThinking, setIsThinking] = useState(false)
   const [conversationHistory, setConversationHistory] = useState<{id: string, title: string, lastMessage: string, timestamp: Date, messages: Message[]}[]>([])
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
@@ -246,6 +274,7 @@ export default function BizoraAIPage() {
   const [isComplexThinking, setIsComplexThinking] = useState(false)
   const [currentResearchTopic, setCurrentResearchTopic] = useState("")
   const [isDeepResearch, setIsDeepResearch] = useState(false)
+  const [coachingStyle, setCoachingStyle] = useState<CoachingStyleId>('balanced')
   const [showGlowEffect, setShowGlowEffect] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const hasLoadedRef = useRef(false) // Track if we've loaded initial data
@@ -290,6 +319,24 @@ export default function BizoraAIPage() {
     if (!email) return 'bizora:conversations' // Legacy fallback
     return `bizora:conversations_${email.toLowerCase().trim()}`
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem('bizora_coaching_style')
+    if (saved && isCoachingStyleId(saved)) setCoachingStyle(saved)
+    const webSearch = localStorage.getItem('bizora_web_search')
+    if (webSearch === 'true') setIsDeepResearch(true)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('bizora_coaching_style', coachingStyle)
+  }, [coachingStyle])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('bizora_web_search', String(isDeepResearch))
+  }, [isDeepResearch])
 
   // Ultra-fast synchronous resize for instant typing
   const resizeTextarea = useCallback(() => {
@@ -946,10 +993,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
             const withDates = (parsed || []).map((conv: any) => ({
               ...conv,
               timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-              messages: (conv.messages || []).map((msg: any) => ({
-                ...msg,
-                timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-              }))
+              messages: (conv.messages || []).map(deserializeMessage)
             }))
             setConversationHistory(withDates)
             // Set the ref to prevent saving on initial load
@@ -975,10 +1019,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
       const deserializedConversations = sessionContext.sessionData.chat.conversations.map((conv: any) => ({
         ...conv,
         timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-        messages: (conv.messages || []).map((msg: any) => ({
-          ...msg,
-          timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-        }))
+        messages: (conv.messages || []).map(deserializeMessage)
       }))
       console.log('✅ Loading from session context:', deserializedConversations.length)
       setConversationHistory(deserializedConversations) // Don't merge - just set directly
@@ -1009,10 +1050,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
             const withDates = parsed.map((conv: any) => ({
               ...conv,
               timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-              messages: (conv.messages || []).map((msg: any) => ({
-                ...msg,
-                timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-              }))
+              messages: (conv.messages || []).map(deserializeMessage)
             }))
             setConversationHistory(withDates)
             previousConversationsRef.current = JSON.stringify(withDates)
@@ -1049,10 +1087,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
     const deserialized = sessionConversations.map((conv: any) => ({
       ...conv,
       timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-      messages: (conv.messages || []).map((msg: any) => ({
-        ...msg,
-        timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-      }))
+      messages: (conv.messages || []).map(deserializeMessage)
     }))
     
     // CRITICAL: Merge instead of replace to prevent duplicates
@@ -1155,10 +1190,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
           const withDates = existingParsed.map((conv: any) => ({
             ...conv,
             timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-            messages: (conv.messages || []).map((msg: any) => ({
-              ...msg,
-              timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-            }))
+            messages: (conv.messages || []).map(deserializeMessage)
           }))
           setConversationHistory(withDates)
           previousConversationsRef.current = JSON.stringify(withDates)
@@ -1261,7 +1293,10 @@ Please provide personalized guidance on how to complete this task. Give me detai
   }
 
   // Generate AI response using API route
-  const handleAIResponse = async (userMessage: string): Promise<string> => {
+  const handleAIResponse = async (
+    userMessage: string,
+    messageAttachments: Attachment[] = []
+  ): Promise<string> => {
     try {
       // Check if this is a research request (either toggle is on or message contains research keywords)
       const isResearchRequest = isDeepResearch || requiresComplexThinking(userMessage)
@@ -1272,7 +1307,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
       
       console.log('Sending API request for:', userMessage)
       // Collect file content from attachments (text files only, exclude PDFs and images)
-      const fileContent = attachments
+      const fileContent = messageAttachments
         .filter(att => 
           att.type === 'file' && 
           att.content && 
@@ -1284,8 +1319,24 @@ Please provide personalized guidance on how to complete this task. Give me detai
         .map(att => `File: ${att.name}\n${att.content}`)
         .join('\n\n---\n\n')
 
+      const linkContent = messageAttachments
+        .filter((att) => att.type === 'link' && att.url)
+        .map((att) => {
+          if (att.content) {
+            return att.content.includes('Platform:')
+              ? att.content
+              : `Link: ${att.url}\nTitle: ${att.name}\n\n${att.content}`
+          }
+          return `Link: ${att.url}\n(Link content could not be fetched — use the URL for context.)`
+        })
+        .join('\n\n---\n\n')
+
+      const combinedFileContent = [fileContent, linkContent]
+        .filter(Boolean)
+        .join('\n\n---\n\n')
+
       // Collect PDF and image attachments for multimodal input
-      const fileAttachments = attachments
+      const fileAttachments = messageAttachments
         .filter(att => 
           att.type === 'file' && 
           (att.isImage || 
@@ -1386,7 +1437,8 @@ Please provide personalized guidance on how to complete this task. Give me detai
           message: userMessage,
           conversationHistory: conversationHistory, // Send full conversation history
           isResearch: isResearchRequest,
-          fileContent: fileContent || undefined,
+          coachingStyle,
+          fileContent: combinedFileContent || undefined,
           fileAttachments: fileAttachments.length > 0 ? fileAttachments : undefined,
           userProfile: entrepreneurProfile || undefined,
           dailyMood: currentMood || undefined,
@@ -1461,11 +1513,81 @@ Please provide personalized guidance on how to complete this task. Give me detai
     }
   }
 
-  const handleSendMessage = () => {
+  const persistConversationAfterReply = (
+    userMessage: Message,
+    aiResponse: Message,
+    messageToProcess: string,
+    priorMessageCount: number
+  ) => {
+    const savedAi: Message = { ...aiResponse }
+
+    if (priorMessageCount === 0) {
+      const conversationId = Date.now().toString()
+      const newConversation = {
+        id: conversationId,
+        title:
+          messageToProcess.length > 30
+            ? messageToProcess.substring(0, 30) + '...'
+            : messageToProcess,
+        lastMessage: savedAi.content.substring(0, 50) + '...',
+        timestamp: new Date(),
+        messages: [userMessage, savedAi],
+      }
+      setConversationHistory((prev) => {
+        const updated = [newConversation, ...prev]
+        if (authUser?.id && sessionContext?.updateChatData) {
+          sessionContext.updateChatData({ conversations: updated })
+        }
+        const userEmail = sessionContext?.sessionData?.email
+        if (!authUser?.id && userEmail && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              getConversationsKey(userEmail),
+              JSON.stringify(updated)
+            )
+          } catch (e) {
+            console.error('Failed immediate save:', e)
+          }
+        }
+        return updated
+      })
+      setSelectedConversationId(conversationId)
+      return
+    }
+
+    setConversationHistory((prev) => {
+      const updated = prev.map((conv) =>
+        conv.id === selectedConversationId
+          ? {
+              ...conv,
+              lastMessage: savedAi.content.substring(0, 50) + '...',
+              timestamp: new Date(),
+              messages: [...conv.messages, userMessage, savedAi],
+            }
+          : conv
+      )
+      if (authUser?.id && sessionContext?.updateChatData) {
+        sessionContext.updateChatData({ conversations: updated })
+      }
+      const userEmail = sessionContext?.sessionData?.email
+      if (!authUser?.id && userEmail && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(
+            getConversationsKey(userEmail),
+            JSON.stringify(updated)
+          )
+        } catch (e) {
+          console.error('Failed immediate save:', e)
+        }
+      }
+      return updated
+    })
+  }
+
+  const handleSendMessage = async () => {
     if (!currentMessage.trim() && attachments.length === 0) return
     if (chatLimitActive) return
 
-    // Store the message before clearing it, so we can restore it if user stops
     lastSentMessageRef.current = currentMessage
 
     const userMessageId = Date.now().toString()
@@ -1474,155 +1596,85 @@ Please provide personalized guidance on how to complete this task. Give me detai
       role: 'user',
       content: currentMessage,
       timestamp: new Date(),
-      attachments: attachments.length > 0 ? [...attachments] : undefined
+      attachments: attachments.length > 0 ? [...attachments] : undefined,
     }
 
-    // Store the user message ID so we can remove it if user stops
     lastUserMessageIdRef.current = userMessageId
+    const priorMessageCount = messages.length
+    const messageToProcess = currentMessage
 
-    setMessages(prev => [...prev, userMessage])
-    setCurrentMessage("")
+    const attachmentsSnapshot = [...attachments]
+
+    setMessages((prev) => [...prev, userMessage])
+    setCurrentMessage('')
     setAttachments([])
     setIsThinking(true)
-    
-    // Auto-scroll to bottom after user message
+
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 100)
-    
-    // Determine if this requires complex thinking
+
     const needsComplexThinking = requiresComplexThinking(currentMessage)
     setIsComplexThinking(needsComplexThinking)
-
-    // Store the message and research topic before clearing it
-    const messageToProcess = currentMessage
     if (needsComplexThinking) {
       setCurrentResearchTopic(extractTopic(currentMessage))
     }
 
-    // Simulate AI thinking and response
-    const thinkingDuration = needsComplexThinking ? 60000 : 7000 // 60 seconds for complex, 7 seconds for normal
-    
-    // Store timeout so we can cancel it if user stops
-    responseTimeoutRef.current = setTimeout(async () => {
-      let aiResponse: Message | undefined
-      
-      try {
-        const aiContent = await handleAIResponse(messageToProcess)
-        
+    let aiResponse: Message | undefined
+
+    try {
+      const aiContent = await handleAIResponse(
+        messageToProcess,
+        attachmentsSnapshot
+      )
+
+      const aiId = (Date.now() + 1).toString()
+      aiResponse = {
+        id: aiId,
+        role: 'ai',
+        content: aiContent,
+        timestamp: new Date(),
+      }
+
+      setStreamingMessageId(aiId)
+      setMessages((prev) => [...prev, aiResponse!])
+    } catch (error) {
+      console.error('Error generating AI response:', error)
+      const msg = error instanceof Error ? error.message : ''
+      const isQuota =
+        error instanceof QuotaExceededError || isQuotaMessage(msg)
+      if (isQuota) {
+        setMessages((prev) => prev.filter((m) => m.id !== userMessageId))
+        setCurrentMessage(messageToProcess)
+        void refreshUsageQuota()
+      } else if (!(error instanceof Error && error.name === 'AbortError')) {
+        const fallbackId = (Date.now() + 1).toString()
         aiResponse = {
-          id: (Date.now() + 1).toString(),
+          id: fallbackId,
           role: 'ai',
-          content: aiContent,
-          timestamp: new Date()
-        }
-        
-        setMessages(prev => [...prev, aiResponse])
-      } catch (error) {
-        console.error('Error generating AI response:', error)
-        const msg =
-          error instanceof Error ? error.message : ''
-        const isQuota =
-          error instanceof QuotaExceededError || isQuotaMessage(msg)
-        if (isQuota) {
-          setMessages((prev) =>
-            prev.filter((m) => m.id !== userMessageId)
-          )
-          setCurrentMessage(messageToProcess)
-          void refreshUsageQuota()
-        } else if (!(error instanceof Error && error.name === 'AbortError')) {
-          aiResponse = {
-            id: (Date.now() + 1).toString(),
-            role: 'ai',
-            content: `I understand you're asking about "${messageToProcess}". Let me provide you with some insights and recommendations.`,
-            timestamp: new Date(),
-          }
-          setMessages((prev) => [...prev, aiResponse])
-        }
-      }
-      
-      setIsThinking(false)
-      setIsComplexThinking(false)
-      setCurrentResearchTopic("")
-      lastSentMessageRef.current = "" // Clear stored message after successful response
-      responseTimeoutRef.current = null // Clear timeout reference
-      lastUserMessageIdRef.current = null // Clear user message ID reference
-      
-      // Scroll to top will be handled by useEffect when isThinking changes from true to false
-
-      if (!aiResponse) {
-        return
-      }
-
-      // Update conversation history
-      // CRITICAL: Always save conversations immediately to prevent data loss
-      if (messages.length === 0) {
-        const conversationId = Date.now().toString()
-        const newConversation = {
-          id: conversationId,
-          title: messageToProcess.length > 30 ? messageToProcess.substring(0, 30) + "..." : messageToProcess,
-          lastMessage: aiResponse.content.substring(0, 50) + "...",
+          content: `I understand you're asking about "${messageToProcess}". Let me provide you with some insights and recommendations.`,
           timestamp: new Date(),
-          messages: [userMessage, aiResponse]
         }
-        setConversationHistory(prev => {
-          const updated = [newConversation, ...prev]
-          
-          // CRITICAL: Save to Supabase immediately for authenticated users
-          if (authUser?.id && sessionContext?.updateChatData) {
-            sessionContext.updateChatData({ conversations: updated })
-            console.log('💾 Saved new conversation to Supabase immediately')
-          }
-          
-          // Only save to localStorage for unauthenticated users
-          const userEmail = sessionContext?.sessionData?.email
-          if (!authUser?.id && userEmail && typeof window !== 'undefined') {
-            try {
-              const conversationsKey = getConversationsKey(userEmail)
-              localStorage.setItem(conversationsKey, JSON.stringify(updated))
-              console.log('💾 Immediately saved new conversation to localStorage (unauthenticated)')
-            } catch (e) {
-              console.error('Failed immediate save:', e)
-            }
-          }
-          return updated
-        })
-        setSelectedConversationId(conversationId)
-      } else {
-        // Update existing conversation
-        setConversationHistory(prev => {
-          const updated = prev.map(conv => 
-            conv.id === selectedConversationId 
-              ? {
-                  ...conv,
-                  lastMessage: aiResponse.content.substring(0, 50) + "...",
-                  timestamp: new Date(),
-                  messages: [...conv.messages, userMessage, aiResponse]
-                }
-              : conv
-          )
-          
-          // CRITICAL: Save to Supabase immediately for authenticated users
-          if (authUser?.id && sessionContext?.updateChatData) {
-            sessionContext.updateChatData({ conversations: updated })
-            console.log('💾 Saved updated conversation to Supabase immediately')
-          }
-          
-          // Only save to localStorage for unauthenticated users
-          const userEmail = sessionContext?.sessionData?.email
-          if (!authUser?.id && userEmail && typeof window !== 'undefined') {
-            try {
-              const conversationsKey = getConversationsKey(userEmail)
-              localStorage.setItem(conversationsKey, JSON.stringify(updated))
-              console.log('💾 Immediately saved updated conversation to localStorage (unauthenticated)')
-            } catch (e) {
-              console.error('Failed immediate save:', e)
-            }
-          }
-          return updated
-        })
+        setStreamingMessageId(fallbackId)
+        setMessages((prev) => [...prev, aiResponse!])
       }
-    }, thinkingDuration)
+    }
+
+    setIsThinking(false)
+    setIsComplexThinking(false)
+    setCurrentResearchTopic('')
+    lastSentMessageRef.current = ''
+    responseTimeoutRef.current = null
+    lastUserMessageIdRef.current = null
+
+    if (aiResponse) {
+      persistConversationAfterReply(
+        userMessage,
+        aiResponse,
+        messageToProcess,
+        priorMessageCount
+      )
+    }
   }
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -1631,17 +1683,58 @@ Please provide personalized guidance on how to complete this task. Give me detai
   }
 
 
-  const handleLinkAdd = () => {
-    if (linkUrl.trim()) {
-      const attachment: Attachment = {
-        id: Date.now().toString() + Math.random(),
-        name: linkUrl,
+  const handleLinkAdd = async () => {
+    const raw = linkUrl.trim()
+    if (!raw) return
+
+    const id = `${Date.now()}-${Math.random()}`
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+
+    setAttachments((prev) => [
+      ...prev,
+      {
+        id,
+        name: normalized,
         type: 'link',
-        url: linkUrl
-      }
-      setAttachments(prev => [...prev, attachment])
-      setLinkUrl("")
-      setShowLinkInput(false)
+        url: normalized,
+        processed: false,
+      },
+    ])
+    setLinkUrl('')
+    setShowLinkInput(false)
+
+    try {
+      const res = await fetch('/api/bizora/fetch-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ url: normalized }),
+      })
+      const data = await res.json()
+      setAttachments((prev) =>
+        prev.map((att) =>
+          att.id === id
+            ? {
+                ...att,
+                name: data.title ?? normalized,
+                content: data.content ?? '',
+                processed: data.success === true,
+              }
+            : att
+        )
+      )
+    } catch {
+      setAttachments((prev) =>
+        prev.map((att) =>
+          att.id === id
+            ? {
+                ...att,
+                processed: false,
+                content: `Link: ${normalized}`,
+              }
+            : att
+        )
+      )
     }
   }
 
@@ -1703,7 +1796,8 @@ Please provide personalized guidance on how to complete this task. Give me detai
     if (conversation) {
       // Mark that we're loading a conversation (so useEffect knows to scroll to bottom)
       isLoadingConversationRef.current = true
-      setMessages(conversation.messages)
+      setStreamingMessageId(null)
+      setMessages(conversation.messages.map(deserializeMessage))
       setSelectedConversationId(conversationId)
       
       // Scroll to the latest message (bottom) after messages are loaded
@@ -1753,6 +1847,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
     
     // If the deleted conversation was selected, clear the messages
     if (selectedConversationId === conversationId) {
+      setStreamingMessageId(null)
       setMessages([])
       setSelectedConversationId(null)
     }
@@ -1874,6 +1969,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                   </Link>
                   <button
                     onClick={() => {
+                      setStreamingMessageId(null)
                       setMessages([])
                       setCurrentMessage("")
                       setSelectedConversationId(null)
@@ -1906,10 +2002,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                             const withDates = parsed.map((conv: any) => ({
                               ...conv,
                               timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-                              messages: (conv.messages || []).map((msg: any) => ({
-                                ...msg,
-                                timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-                              }))
+                              messages: (conv.messages || []).map(deserializeMessage)
                             }))
                             setConversationHistory(withDates)
                             previousConversationsRef.current = JSON.stringify(withDates)
@@ -1929,10 +2022,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                             const withDates = parsed.map((conv: any) => ({
                               ...conv,
                               timestamp: typeof conv.timestamp === 'string' ? new Date(conv.timestamp) : conv.timestamp,
-                              messages: (conv.messages || []).map((msg: any) => ({
-                                ...msg,
-                                timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
-                              }))
+                              messages: (conv.messages || []).map(deserializeMessage)
                             }))
                             setConversationHistory(withDates)
                             previousConversationsRef.current = JSON.stringify(withDates)
@@ -2119,7 +2209,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                 )}
               </div>
             ) : (
-              <div className="space-y-6 max-w-4xl mx-auto">
+              <div className={`space-y-8 max-w-3xl mx-auto px-2 ${bizoraSerif.className}`}>
                 {/* Scroll anchor for auto-scrolling to top */}
                 <div ref={messagesStartRef} />
                 {messages.map((message, index) => {
@@ -2128,47 +2218,46 @@ Please provide personalized guidance on how to complete this task. Give me detai
                   const isLastAIMessage = message.role === 'ai' && message.id === aiMessages[aiMessages.length - 1]?.id
                   
                   return (
-                  <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-3xl ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
+                  <div key={message.id} className={`flex w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`w-full ${message.role === 'user' ? 'max-w-[85%] sm:max-w-[75%]' : 'max-w-full'}`}>
                       
                       {message.role === 'user' ? (
-                        <div className="rounded-2xl p-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                          <p className="text-xl font-medium text-black dark:text-white leading-relaxed" style={{ fontFamily: '"Space Grotesk", sans-serif', textShadow: '0 1px 1px rgba(0, 0, 0, 0.04)' }}>
+                        <div className="rounded-2xl bg-gray-100 px-4 py-3 dark:bg-gray-800/90">
+                          <p className="text-[17px] leading-relaxed text-black dark:text-gray-100">
                             {message.content}
                           </p>
                         </div>
                       ) : (
                         <div 
                           ref={isLastAIMessage ? lastAIRef : null}
-                          className="animate-fade-in"
+                          className="animate-fade-in py-1"
                         >
-                          <AIResponse 
-                            content={message.content}
+                          <StreamingAIMessage
+                            key={message.id}
+                            fullText={message.content}
+                            animate={
+                              message.role === 'ai' &&
+                              message.id === streamingMessageId
+                            }
+                            onRevealProgress={() => {
+                              messagesEndRef.current?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'end',
+                              })
+                            }}
+                            onStreamComplete={() => {
+                              setStreamingMessageId((current) =>
+                                current === message.id ? null : current
+                              )
+                              messagesEndRef.current?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'end',
+                              })
+                            }}
                             onCopy={() => navigator.clipboard.writeText(message.content)}
                             onLike={() => console.log('Liked')}
                             onDislike={() => console.log('Disliked')}
                             onShare={() => handleShareMessage(message.content)}
-                            onAddToPrompt={(text) => {
-                              // Add selected text to textarea
-                              const currentText = currentMessage.trim()
-                              const newText = currentText 
-                                ? `${currentText}\n\n${text}` 
-                                : text
-                              setCurrentMessage(newText)
-                              
-                              // Focus and scroll textarea into view
-                              setTimeout(() => {
-                                if (textareaRef.current) {
-                                  textareaRef.current.focus()
-                                  textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-                                  // Set cursor to end
-                                  const length = textareaRef.current.value.length
-                                  textareaRef.current.setSelectionRange(length, length)
-                                  // Auto-resize using optimized function
-                                  resizeTextarea()
-                                }
-                              }, 100)
-                            }}
                           />
                         </div>
                       )}
@@ -2259,6 +2348,12 @@ Please provide personalized guidance on how to complete this task. Give me detai
                     <span className="text-black dark:text-gray-200 truncate max-w-[200px]">
                       {attachment.name}
                     </span>
+                    {attachment.type === 'link' && attachment.processed === false && (
+                      <span className="text-xs text-[#2DA8FF]">Reading…</span>
+                    )}
+                    {attachment.type === 'link' && attachment.processed === true && (
+                      <span className="text-xs text-green-600 dark:text-green-400">✓ Ready</span>
+                    )}
                     <button
                       onClick={() => removeAttachment(attachment.id)}
                       className="text-black hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
@@ -2275,7 +2370,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
               <div className="mb-2 flex gap-2">
                 <input
                   type="url"
-                  placeholder="Paste a link..."
+                  placeholder="Paste any link (YouTube, LinkedIn, articles, etc.)"
                   value={linkUrl}
                   onChange={(e) => setLinkUrl(e.target.value)}
                   onKeyDown={(e) => {
@@ -2390,8 +2485,24 @@ Please provide personalized guidance on how to complete this task. Give me detai
               onCooldownEnd={() => void refreshUsageQuota()}
             />
 
-            <div className="flex gap-2 items-end max-w-4xl mx-auto w-full">
-              <div className="flex-1 relative">
+            <div className="mx-auto w-full max-w-3xl">
+              <div
+                className={`relative flex items-end gap-2 rounded-2xl border bg-white px-3 py-2.5 shadow-sm transition-shadow dark:bg-gray-800/95 ${
+                  showGlowEffect
+                    ? 'border-[#39d2c0] ring-2 ring-[#39d2c0]/25'
+                    : isVoicePanelOpen
+                      ? 'border-[#39d2c0]/50'
+                      : 'border-gray-200 dark:border-gray-600'
+                }`}
+              >
+                <ComposerAttachMenu
+                  webSearchEnabled={isDeepResearch}
+                  onWebSearchToggle={() => setIsDeepResearch((v) => !v)}
+                  coachingStyle={coachingStyle}
+                  onCoachingStyleChange={setCoachingStyle}
+                  onPasteLink={() => setShowLinkInput(true)}
+                  disabled={isThinking || chatLimitActive}
+                />
                 <button
                   type="button"
                   onClick={() => (isVoicePanelOpen ? stopVoiceInput() : void startVoiceInput())}
@@ -2399,15 +2510,15 @@ Please provide personalized guidance on how to complete this task. Give me detai
                   aria-pressed={isVoicePanelOpen}
                   title={
                     !voiceInputAvailable
-                      ? "Voice input is not available in this browser"
+                      ? 'Voice input is not available in this browser'
                       : isVoicePanelOpen
-                        ? "Stop voice input"
-                        : "Voice input — speak to fill the message"
+                        ? 'Stop voice input'
+                        : 'Voice input'
                   }
-                  className={`absolute left-1.5 bottom-2 z-10 p-1.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  className={`mb-1 shrink-0 rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     isVoicePanelOpen
-                      ? "text-[#39d2c0] ring-2 ring-[#39d2c0]/30 dark:bg-[#39d2c0]/15"
-                      : "text-gray-500 hover:text-gray-800 enabled:hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-200 dark:enabled:hover:bg-gray-700"
+                      ? 'text-[#39d2c0] bg-[#39d2c0]/10'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
                   <Mic className="h-4 w-4" aria-hidden />
@@ -2417,79 +2528,54 @@ Please provide personalized guidance on how to complete this task. Give me detai
                   placeholder={
                     chatLimitActive
                       ? chatLimitPlaceholder(chatCooldownUntil)
-                      : "Ask, Search, Create and Plan"
+                      : 'Reply to Bizora…'
                   }
                   value={currentMessage}
                   onChange={(e) => {
                     const value = e.target.value
                     setCurrentMessage(value)
                     const textarea = e.target as HTMLTextAreaElement
-                    textarea.style.height = "auto"
-                    textarea.style.height = `${Math.min(textarea.scrollHeight, 384)}px`
+                    textarea.style.height = 'auto'
+                    textarea.style.height = `${Math.min(textarea.scrollHeight, 320)}px`
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
-                      handleSendMessage()
+                      void handleSendMessage()
                     }
                   }}
-                  className={`w-full min-h-[48px] max-h-96 resize-none rounded-lg pl-10 pr-24 border p-2.5 text-sm text-black overflow-y-auto dark:bg-gray-800 dark:text-white focus:border-[#39d2c0] focus:ring-2 focus:ring-[#39d2c0]/20 focus:shadow-sm focus:shadow-[#39d2c0]/10 ${
-                    showGlowEffect
-                      ? "border-[#39d2c0] ring-4 ring-[#39d2c0]/30 shadow-lg shadow-[#39d2c0]/20"
-                      : isVoicePanelOpen
-                        ? "border-[#39d2c0]/50 ring-1 ring-[#39d2c0]/25"
-                        : "border-gray-300 dark:border-gray-600"
-                  }`}
+                  className="max-h-80 min-h-[44px] flex-1 resize-none border-0 bg-transparent py-2 text-[17px] leading-relaxed text-black outline-none ring-0 focus:ring-0 dark:text-white"
                   rows={1}
                   disabled={isThinking || chatLimitActive}
                 />
-                <div className="absolute right-1.5 bottom-1.5 z-10 flex gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowLinkInput(true)}
-                    className="cursor-pointer rounded-lg p-1.5 text-black transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                    title="Add link"
-                  >
-                    <LinkIcon className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeepResearchClick}
-                    className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition-all duration-200 ${
-                      isDeepResearch
-                        ? "bg-[#39d2c0]/10 text-[#39d2c0] shadow-md shadow-[#39d2c0]/20 dark:bg-[#39d2c0]/30 dark:text-[#39d2c0]"
-                        : "text-black hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                    }`}
-                    title={isDeepResearch ? "Turn off Deep Research Mode" : "Turn on Deep Research Mode"}
-                  >
-                    <Globe className={`h-3.5 w-3.5 transition-all duration-200 ${isDeepResearch ? "text-[#39d2c0]" : ""}`} />
-                    <span className="text-xs font-medium">Deep research</span>
-                  </button>
+                <div className="mb-1 flex shrink-0 items-center gap-1">
+                  {isThinking ? (
+                    <Button
+                      onClick={handleStopRequest}
+                      size="sm"
+                      className="h-9 w-9 rounded-xl bg-gray-700 p-0 text-white hover:bg-gray-600"
+                    >
+                      <Square className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => void handleSendMessage()}
+                      disabled={
+                        chatLimitActive ||
+                        (!currentMessage.trim() && attachments.length === 0)
+                      }
+                      size="sm"
+                      className="h-9 w-9 rounded-xl bg-gray-800 p-0 text-white hover:bg-gray-700 disabled:opacity-40 dark:bg-gray-600 dark:hover:bg-gray-500"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
-              {isThinking ? (
-                <Button
-                  onClick={handleStopRequest}
-                  className="bg-gray-700 hover:bg-gray-600 text-white h-10 w-10 rounded-full transition-colors duration-200 flex items-center justify-center"
-                >
-                  <Square className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={
-                    chatLimitActive ||
-                    (!currentMessage.trim() && attachments.length === 0)
-                  }
-                  className="h-10 w-10 flex shrink-0 items-center justify-center rounded-full bg-gray-700 text-white transition-colors duration-200 hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              )}
+              <p className="mt-2 text-center text-[11px] text-gray-500 dark:text-gray-400">
+                Bizora can make mistakes — verify important business decisions.
+              </p>
             </div>
-            <p className="text-xs text-black dark:text-gray-300 mt-1.5">
-              Press Enter to send • Shift + Enter for new line • Mic to dictate • Attach links
-            </p>
           </div>
         </div>
       </div>

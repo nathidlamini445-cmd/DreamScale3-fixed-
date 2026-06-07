@@ -1,5 +1,7 @@
 export const CHAT_MESSAGES_PER_CYCLE = 5
-export const CHAT_COOLDOWN_MS = 8 * 60 * 60 * 1000
+/** Cooldown after using all 5 messages (also used as inactivity reset window). */
+export const CHAT_COOLDOWN_MS = 6 * 60 * 60 * 1000
+export const CHAT_INACTIVITY_RESET_MS = CHAT_COOLDOWN_MS
 export const MONTHLY_FEATURE_LIMIT = 2
 export const MONTHLY_UPLOAD_LIMIT = 2
 
@@ -14,6 +16,8 @@ export type FreeUsageRecord = {
   period: string
   chat_messages_used: number
   chat_cooldown_until: string | null
+  /** ISO timestamp of last Bizora message — resets quota after inactivity. */
+  chat_last_activity_at: string | null
   bizora_uploads: number
   systems: number
   revenue: number

@@ -8,6 +8,10 @@ export const chatSchema = z.object({
   message: z.string().min(1, 'Message is required').max(50000, 'Message too long'),
   conversationHistory: z.array(z.any()).optional().default([]),
   isResearch: z.boolean().optional().default(false),
+  coachingStyle: z
+    .enum(['balanced', 'mentorship', 'direct', 'understanding', 'deep'])
+    .optional()
+    .default('balanced'),
   fileContent: z.string().optional(),
   fileAttachments: z.array(z.any()).optional(),
   userProfile: z.any().optional(),

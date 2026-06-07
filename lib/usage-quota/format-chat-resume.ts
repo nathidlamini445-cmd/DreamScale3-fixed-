@@ -68,7 +68,7 @@ export function getChatLimitReachedCopy(cooldownUntilIso: string | null | undefi
     title: "You've reached your free message limit",
     resumeLine,
     detail:
-      'Free plan includes 5 messages per cycle. ' +
+      'Free plan includes 5 messages per cycle (resets after 6 hours without chatting). ' +
       (resume ? resume.resumeLine + ' ' : '') +
       'Upgrade to Pro for unlimited coaching anytime.',
   }
