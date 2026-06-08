@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import { useSessionSafe } from '@/lib/session-context'
@@ -19,8 +19,64 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
   const authResolved = isLoaded
   const sessionLoading = sessionContext?.isLoadingSession === true
   const hasHydratedUserSession = sessionContext?.hasHydratedUserSession === true
+  const updateEntrepreneurProfile = sessionContext?.updateEntrepreneurProfile
   const onboardingCompleted =
     sessionContext?.sessionData?.entrepreneurProfile?.onboardingCompleted === true
+  const [profileCheckDone, setProfileCheckDone] = useState(false)
+  const [profileOnboardingComplete, setProfileOnboardingComplete] = useState(false)
+
+  useEffect(() => {
+    setProfileCheckDone(false)
+    setProfileOnboardingComplete(false)
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!authResolved || loading || !user?.id || sessionLoading || !hasHydratedUserSession) {
+      return
+    }
+    if (onboardingCompleted) {
+      setProfileCheckDone(true)
+      setProfileOnboardingComplete(true)
+      return
+    }
+    if (profileCheckDone) return
+
+    let cancelled = false
+    void fetch('/api/me/onboarding-status', { credentials: 'same-origin' })
+      .then(async (res) => {
+        if (!res.ok) return false
+        const body = (await res.json()) as { onboardingCompleted?: boolean }
+        return body.onboardingCompleted === true
+      })
+      .then((complete) => {
+        if (cancelled) return
+        setProfileCheckDone(true)
+        setProfileOnboardingComplete(complete)
+        if (complete && updateEntrepreneurProfile) {
+          void updateEntrepreneurProfile({ onboardingCompleted: true })
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setProfileCheckDone(true)
+        setProfileOnboardingComplete(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    authResolved,
+    loading,
+    user?.id,
+    sessionLoading,
+    hasHydratedUserSession,
+    onboardingCompleted,
+    profileCheckDone,
+    updateEntrepreneurProfile,
+  ])
+
+  const effectivelyOnboarded = onboardingCompleted || profileOnboardingComplete
 
   useEffect(() => {
     if (!authResolved || loading) return
@@ -28,23 +84,36 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
     if (user?.id && sessionLoading) return
     /** Also wait until signed-in hydration has completed at least once. */
     if (user?.id && !hasHydratedUserSession) return
+    /** If session says incomplete, wait for user_profiles verification. */
+    if (user?.id && !onboardingCompleted && !profileCheckDone) return
 
     if (pathname === '/onboarding') {
-      if (user?.id && onboardingCompleted) {
+      if (user?.id && effectivelyOnboarded) {
         router.replace('/dashboard')
       }
       return
     }
 
     if (!user?.id) return
-    if (user.id && onboardingCompleted) return
+    if (user.id && effectivelyOnboarded) return
 
     // Signed in but onboarding not finished: keep them on the onboarding route only —
     // do not mount the dashboard (or heavy pages) underneath the wizard anymore.
     if (!isAuthEntryPath(pathname) && pathname !== '/onboarding') {
       router.replace('/onboarding')
     }
-  }, [authResolved, loading, pathname, user?.id, onboardingCompleted, sessionLoading, hasHydratedUserSession, router])
+  }, [
+    authResolved,
+    loading,
+    pathname,
+    user?.id,
+    onboardingCompleted,
+    effectivelyOnboarded,
+    sessionLoading,
+    hasHydratedUserSession,
+    profileCheckDone,
+    router,
+  ])
 
   const showRedirectSpinner =
     authResolved &&
@@ -53,7 +122,8 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
     (
       sessionLoading ||
       !hasHydratedUserSession ||
-      (onboardingCompleted !== true &&
+      (!onboardingCompleted && !profileCheckDone) ||
+      (!effectivelyOnboarded &&
         !isAuthEntryPath(pathname) &&
         pathname !== '/onboarding')
     )

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react"
 import { useSessionSafe } from "@/lib/session-context"
 import { useUser } from "@clerk/nextjs"
 import { useBizoraLoading } from "@/lib/bizora-loading-context"
@@ -46,6 +46,10 @@ import { VoiceWaveform } from "@/components/bizora/voice-waveform"
 import { ChatQuotaBanner } from "@/components/bizora/chat-quota-banner"
 import { ChatLimitReached } from "@/components/bizora/chat-limit-reached"
 import { ComposerAttachMenu } from "@/components/bizora/composer-attach-menu"
+import {
+  playVoiceStartSound,
+  playVoiceStopSound,
+} from "@/lib/bizora/voice-feedback-sounds"
 import {
   isCoachingStyleId,
   type CoachingStyleId,
@@ -255,6 +259,7 @@ export default function BizoraAIPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [currentMessage, setCurrentMessage] = useState("")
+  const [replyQuote, setReplyQuote] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   /** Only the latest incoming AI reply plays the typing animation once. */
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
@@ -286,6 +291,7 @@ export default function BizoraAIPage() {
   const lastAIRef = useRef<HTMLDivElement>(null) // Ref for the most recent AI response
   const taskPromptProcessedRef = useRef(false) // Track if we've processed task prompt from URL
   const textareaRef = useRef<HTMLTextAreaElement>(null) // Ref for auto-expanding textarea
+  const focusComposerRef = useRef(false)
   /** UI only — like a hamburger menu: stays open until the user closes it; not tied to Speech API lifecycle. */
   const [isVoicePanelOpen, setIsVoicePanelOpen] = useState(false)
   /** Shown inside the voice bar if getUserMedia was denied (no blocking alert). */
@@ -349,6 +355,19 @@ export default function BizoraAIPage() {
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`
     }
   }, [])
+
+  const handleAskAboutSelection = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    setReplyQuote(trimmed)
+    focusComposerRef.current = true
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!focusComposerRef.current) return
+    focusComposerRef.current = false
+    textareaRef.current?.focus()
+  }, [replyQuote])
 
   useEffect(() => {
     setVoiceInputAvailable(isVoiceInputSupported())
@@ -530,6 +549,7 @@ export default function BizoraAIPage() {
   const startVoiceInputRef = useRef<(() => void) | null>(null)
 
   const stopVoiceInput = useCallback(() => {
+    playVoiceStopSound()
     const rec = recognitionRef.current
     if (rec) {
       try {
@@ -570,6 +590,7 @@ export default function BizoraAIPage() {
       return
     }
 
+    playVoiceStartSound()
     voiceUserKeepsPanelOpenRef.current = true
     setIsVoicePanelOpen(true)
     setMicPermissionHint(null)
@@ -1360,6 +1381,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
           console.log('🔍 Loading user business data from Supabase user_profiles for Bizora AI')
           
           // Fetch full profile from Supabase user_profiles table
+          const supabase = createClient()
           const { data: profile, error } = await supabase
             .from('user_profiles')
             .select('*')
@@ -1585,7 +1607,13 @@ Please provide personalized guidance on how to complete this task. Give me detai
   }
 
   const handleSendMessage = async () => {
-    if (!currentMessage.trim() && attachments.length === 0) return
+    const body = currentMessage.trim()
+    const messageContent = replyQuote
+      ? body
+        ? `"${replyQuote.replace(/\s+/g, ' ')}" — ${body}`
+        : `"${replyQuote.replace(/\s+/g, ' ')}"`
+      : body
+    if (!messageContent && attachments.length === 0) return
     if (chatLimitActive) return
 
     lastSentMessageRef.current = currentMessage
@@ -1594,19 +1622,20 @@ Please provide personalized guidance on how to complete this task. Give me detai
     const userMessage: Message = {
       id: userMessageId,
       role: 'user',
-      content: currentMessage,
+      content: messageContent,
       timestamp: new Date(),
       attachments: attachments.length > 0 ? [...attachments] : undefined,
     }
 
     lastUserMessageIdRef.current = userMessageId
     const priorMessageCount = messages.length
-    const messageToProcess = currentMessage
+    const messageToProcess = messageContent
 
     const attachmentsSnapshot = [...attachments]
 
     setMessages((prev) => [...prev, userMessage])
     setCurrentMessage('')
+    setReplyQuote(null)
     setAttachments([])
     setIsThinking(true)
 
@@ -1614,10 +1643,10 @@ Please provide personalized guidance on how to complete this task. Give me detai
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 100)
 
-    const needsComplexThinking = requiresComplexThinking(currentMessage)
+    const needsComplexThinking = requiresComplexThinking(messageContent)
     setIsComplexThinking(needsComplexThinking)
     if (needsComplexThinking) {
-      setCurrentResearchTopic(extractTopic(currentMessage))
+      setCurrentResearchTopic(extractTopic(messageContent))
     }
 
     let aiResponse: Message | undefined
@@ -2258,6 +2287,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                             onLike={() => console.log('Liked')}
                             onDislike={() => console.log('Disliked')}
                             onShare={() => handleShareMessage(message.content)}
+                            onAskAboutSelection={handleAskAboutSelection}
                           />
                         </div>
                       )}
@@ -2487,7 +2517,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
 
             <div className="mx-auto w-full max-w-3xl">
               <div
-                className={`relative flex items-end gap-2 rounded-2xl border bg-white px-3 py-2.5 shadow-sm transition-shadow dark:bg-gray-800/95 ${
+                className={`relative flex flex-col gap-2 rounded-2xl border bg-white px-3 py-2.5 shadow-sm transition-shadow dark:bg-gray-800/95 ${
                   showGlowEffect
                     ? 'border-[#39d2c0] ring-2 ring-[#39d2c0]/25'
                     : isVoicePanelOpen
@@ -2495,6 +2525,24 @@ Please provide personalized guidance on how to complete this task. Give me detai
                       : 'border-gray-200 dark:border-gray-600'
                 }`}
               >
+                {replyQuote && (
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1 rounded-lg border border-gray-200/90 bg-gray-50/90 px-3 py-2 dark:border-gray-600 dark:bg-gray-900/50">
+                      <p className="line-clamp-4 whitespace-pre-wrap text-[14px] leading-snug text-gray-600 dark:text-gray-300">
+                        {replyQuote}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyQuote(null)}
+                      className="mt-0.5 shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                      aria-label="Remove quoted text"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
                 <ComposerAttachMenu
                   webSearchEnabled={isDeepResearch}
                   onWebSearchToggle={() => setIsDeepResearch((v) => !v)}
@@ -2562,7 +2610,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                       onClick={() => void handleSendMessage()}
                       disabled={
                         chatLimitActive ||
-                        (!currentMessage.trim() && attachments.length === 0)
+                        (!currentMessage.trim() && !replyQuote && attachments.length === 0)
                       }
                       size="sm"
                       className="h-9 w-9 rounded-xl bg-gray-800 p-0 text-white hover:bg-gray-700 disabled:opacity-40 dark:bg-gray-600 dark:hover:bg-gray-500"
@@ -2570,6 +2618,7 @@ Please provide personalized guidance on how to complete this task. Give me detai
                       <Send className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                </div>
                 </div>
               </div>
               <p className="mt-2 text-center text-[11px] text-gray-500 dark:text-gray-400">

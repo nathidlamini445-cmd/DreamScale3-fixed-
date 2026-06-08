@@ -21,21 +21,76 @@ export async function GET() {
   }
 
   const supabase = createClient(url.trim(), serviceKey.trim())
-  const { data, error } = await supabase
-    .from('user_sessions')
-    .select('session_data')
-    .eq('user_id', user.id)
-    .maybeSingle()
 
-  if (error) {
-    const hint = hintForSupabaseServiceError(error.message)
+  const [sessionResult, profileResult] = await Promise.all([
+    supabase
+      .from('user_sessions')
+      .select('session_data')
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('user_profiles')
+      .select(
+        'onboarding_completed, user_name, business_name, industry, business_stage'
+      )
+      .eq('id', user.id)
+      .maybeSingle(),
+  ])
+
+  if (sessionResult.error) {
+    const hint = hintForSupabaseServiceError(sessionResult.error.message)
     return NextResponse.json(
-      { error: error.message, ...(hint ? { hint } : {}) },
+      { error: sessionResult.error.message, ...(hint ? { hint } : {}) },
       { status: 500 }
     )
   }
 
-  return NextResponse.json({ sessionData: data?.session_data ?? null })
+  const profileRow = profileResult.error ? null : profileResult.data
+  const profileOnboardingDone = profileRow?.onboarding_completed === true
+
+  const rawSession = sessionResult.data?.session_data
+  const sessionData =
+    rawSession && typeof rawSession === 'object' && !Array.isArray(rawSession)
+      ? { ...(rawSession as Record<string, unknown>) }
+      : ({} as Record<string, unknown>)
+
+  const existingProfile =
+    sessionData.entrepreneurProfile &&
+    typeof sessionData.entrepreneurProfile === 'object' &&
+    !Array.isArray(sessionData.entrepreneurProfile)
+      ? (sessionData.entrepreneurProfile as Record<string, unknown>)
+      : {}
+
+  sessionData.entrepreneurProfile = {
+    ...existingProfile,
+    onboardingCompleted:
+      profileOnboardingDone || existingProfile.onboardingCompleted === true,
+    name:
+      (existingProfile.name as string | null | undefined) ??
+      profileRow?.user_name ??
+      null,
+    businessName:
+      (existingProfile.businessName as string | null | undefined) ??
+      profileRow?.business_name ??
+      null,
+    industry:
+      (existingProfile.industry as string | string[] | null | undefined) ??
+      profileRow?.industry ??
+      null,
+    businessStage:
+      (existingProfile.businessStage as string | string[] | null | undefined) ??
+      profileRow?.business_stage ??
+      null,
+  }
+
+  const hasSessionPayload =
+    Object.keys(sessionData).length > 0 ||
+    profileOnboardingDone ||
+    profileRow != null
+
+  return NextResponse.json({
+    sessionData: hasSessionPayload ? sessionData : null,
+  })
 }
 
 /**

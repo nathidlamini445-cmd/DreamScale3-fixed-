@@ -23,6 +23,11 @@ export default function AuthResolvePage() {
           return
         }
         if (!res.ok) {
+          // Do not treat server errors as "new user" — existing accounts would loop into onboarding.
+          if (res.status >= 500) {
+            router.replace('/dashboard')
+            return
+          }
           router.replace('/onboarding')
           return
         }
@@ -33,7 +38,7 @@ export default function AuthResolvePage() {
           router.replace('/onboarding')
         }
       } catch {
-        router.replace('/onboarding')
+        router.replace('/dashboard')
       }
     }
 
