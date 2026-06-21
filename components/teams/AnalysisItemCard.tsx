@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, Eye, Calendar, Loader2, Share } from "lucide-react"
 import { ShareModal } from '@/components/share-modal'
+import type { SmartTaskAssignment } from '@/lib/teams-types'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,20 @@ interface AnalysisItemCardProps {
   children: React.ReactNode // The detailed view content
   type: 'dna' | 'task' | 'health' | 'cofounder' | 'ritual'
   detailRoute?: string // Optional route to navigate to instead of opening dialog
+  shareContent?: string
+  shareContentType?: string
+  taskAssignment?: SmartTaskAssignment
+  revenueAnalysis?: {
+    companyName: string
+    industry: string
+    analysis: {
+      revenueStreams: { name: string; type: string; estimatedRevenue: string; growthRate: string; description: string }[]
+      pricingStrategy: { model: string; analysis: string; recommendations: string[] }
+      marketPosition: { position: string; competitors: string[]; differentiation: string }
+      growthOpportunities: { opportunity: string; potential: string; actionItems: string[] }[]
+      revenueProjections: { timeframe: string; projection: string; assumptions: string[] }[]
+    }
+  }
 }
 
 export function AnalysisItemCard({ 
@@ -38,7 +53,11 @@ export function AnalysisItemCard({
   onDelete,
   children,
   type,
-  detailRoute
+  detailRoute,
+  shareContent,
+  shareContentType,
+  taskAssignment,
+  revenueAnalysis,
 }: AnalysisItemCardProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -146,11 +165,15 @@ export function AnalysisItemCard({
                 onClick={(e) => {
                   e.stopPropagation()
                   // Format content for sharing - extract text from children
-                  const content = typeof children === 'string' ? children : `# ${title}\n\n${subtitle || ''}\n\n[Content from ${type} analysis]`
+                  const content =
+                    shareContent ??
+                    (typeof children === 'string'
+                      ? children
+                      : `# ${title}\n\n${subtitle || ''}\n\n[Open this analysis to view full details, then use Share from the detail view.]`)
                   setShareModal({
                     isOpen: true,
                     content,
-                    title
+                    title,
                   })
                 }}
                 className="h-8 w-8 p-0 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -258,8 +281,13 @@ export function AnalysisItemCard({
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType={`Team ${type === 'dna' ? 'DNA Analysis' : type === 'task' ? 'Task Assignment' : type === 'health' ? 'Health Monitor' : type === 'cofounder' ? 'Co-Founder Match' : 'Ritual'}`}
+        contentType={
+          shareContentType ??
+          `Team ${type === 'dna' ? 'DNA Analysis' : type === 'task' ? 'Task Assignment' : type === 'health' ? 'Health Monitor' : type === 'cofounder' ? 'Co-Founder Match' : 'Ritual'}`
+        }
         contentTitle={shareModal.title}
+        taskAssignment={taskAssignment}
+        revenueAnalysis={revenueAnalysis}
       />
     </>
   )

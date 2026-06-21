@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, X, Trash2, Edit2, Check, XCircle } from "lucide-react"
 import { CEORoutine } from '@/lib/leadership-types'
+import { AddRoutineToGoogleCalendarButton } from '@/components/integrations/AddRoutineToGoogleCalendarButton'
 
 interface CEOOperatingSystemProps {
   routines: CEORoutine[]
@@ -212,16 +213,19 @@ export default function CEOOperatingSystem({ routines, onAddRoutine, onDeleteRou
       {selectedRoutine && (
         <div className="bg-white dark:bg-slate-950 border border-gray-200/60 dark:border-gray-800/60 rounded-lg p-8 shadow-[0_1px_3px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_3px_0_rgba(0,0,0,0.2)]">
           <div className="mb-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <h3 className="text-xl font-medium text-gray-900 dark:text-white">{selectedRoutine.name}</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedRoutine(null)}
-                className="border-gray-200/60 dark:border-gray-800/60"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <AddRoutineToGoogleCalendarButton routine={selectedRoutine} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedRoutine(null)}
+                  className="border-gray-200/60 dark:border-gray-800/60"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
               {selectedRoutine.type.charAt(0).toUpperCase() + selectedRoutine.type.slice(1)} CEO Operating System
@@ -371,7 +375,14 @@ export default function CEOOperatingSystem({ routines, onAddRoutine, onDeleteRou
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button 
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <AddRoutineToGoogleCalendarButton
+                        routine={routine}
+                        label="Add to Calendar"
+                        className="h-8 px-2 text-xs"
+                      />
+                    </div>
+                    <Button
                       variant="ghost" 
                       size="sm" 
                       className="border-gray-200/60 dark:border-gray-800/60 font-medium"

@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Calendar, Target, CheckCircle2, AlertTriangle, TrendingUp, Users } from "lucide-react"
 import { LeadershipChallenge } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,30 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 export default function LeadershipChallengeDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [challenge, setChallenge] = useState<LeadershipChallenge | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadChallenge = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const leadershipData = JSON.parse(saved)
-          const challenges = leadershipData.challenges || []
-          const foundChallenge = challenges.find((c: LeadershipChallenge) => c.id === params.id)
-          if (foundChallenge) {
-            setChallenge(foundChallenge)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load challenge:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadChallenge()
-  }, [params.id])
+  const { item: challenge, loading } = useLeadershipDetail<LeadershipChallenge>('challenges', params.id)
 
   if (loading) {
     return (

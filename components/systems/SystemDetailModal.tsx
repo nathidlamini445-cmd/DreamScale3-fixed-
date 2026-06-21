@@ -9,6 +9,7 @@ import { BusinessSystem } from "./SystemBuilder"
 import { cn } from "@/lib/utils"
 import MiroFlowDiagram from "./MiroFlowDiagram"
 import StepExplanationModal from "./StepExplanationModal"
+import { SystemToolChip, AutomationLinkedText } from "./SystemToolLinks"
 
 interface SystemDetailModalProps {
   system: BusinessSystem | null
@@ -170,14 +171,9 @@ export default function SystemDetailModal({ system, isOpen, onClose }: SystemDet
           <TabsContent value="tools" className="mt-4">
             <div className="space-y-4">
               {system.tools.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="flex flex-wrap gap-2">
                   {system.tools.map((tool, index) => (
-                    <div
-                      key={index}
-                      className="px-4 py-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-900 dark:text-white"
-                    >
-                      {tool}
-                    </div>
+                    <SystemToolChip key={index} name={tool} />
                   ))}
                 </div>
               ) : (
@@ -195,7 +191,7 @@ export default function SystemDetailModal({ system, isOpen, onClose }: SystemDet
                     className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 flex items-start gap-3"
                   >
                     <Zap className="w-5 h-5 text-[#39d2c0] flex-shrink-0 mt-0.5" />
-                    <p className="text-gray-700 dark:text-gray-300">{opp}</p>
+                    <AutomationLinkedText text={opp} />
                   </div>
                 ))
               ) : (

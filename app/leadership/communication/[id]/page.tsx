@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Calendar, MessageSquare, CheckCircle2, AlertCircle, Lightbulb, TrendingUp, Heart } from "lucide-react"
 import { Communication } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,30 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 export default function LeadershipCommunicationDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [communication, setCommunication] = useState<Communication | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadCommunication = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const leadershipData = JSON.parse(saved)
-          const communications = leadershipData.communications || []
-          const foundCommunication = communications.find((c: Communication) => c.id === params.id)
-          if (foundCommunication) {
-            setCommunication(foundCommunication)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load communication:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadCommunication()
-  }, [params.id])
+  const { item: communication, loading } = useLeadershipDetail<Communication>('communications', params.id)
 
   if (loading) {
     return (

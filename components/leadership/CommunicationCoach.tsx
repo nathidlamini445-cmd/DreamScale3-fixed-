@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, X, Trash2 } from "lucide-react"
+import { Loader2, X, Trash2, Share } from "lucide-react"
 import { Communication } from '@/lib/leadership-types'
 import { AIResponse } from '@/components/ai-response'
+import { ShareModal } from '@/components/share-modal'
+import { formatCommunicationForShare } from '@/lib/export/share-content'
 
 interface CommunicationCoachProps {
   communications: Communication[]
@@ -25,6 +27,11 @@ export default function CommunicationCoach({ communications, onAddCommunication,
   const [isReviewing, setIsReviewing] = useState(false)
   const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null)
   const [navigatingId, setNavigatingId] = useState<string | null>(null)
+  const [shareModal, setShareModal] = useState<{ isOpen: boolean; content: string; title: string }>({
+    isOpen: false,
+    content: '',
+    title: '',
+  })
 
   // Clear loading state when route changes (navigation completed) or after timeout
   useEffect(() => {
@@ -166,14 +173,32 @@ export default function CommunicationCoach({ communications, onAddCommunication,
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-medium text-gray-900 dark:text-white">Improved Communication</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedCommunication(null)}
-                className="border-gray-200/60 dark:border-gray-800/60"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!selectedCommunication) return
+                    setShareModal({
+                      isOpen: true,
+                      content: formatCommunicationForShare(selectedCommunication),
+                      title: `Communication Review · ${selectedCommunication.type.replace('-', ' ')}`,
+                    })
+                  }}
+                  className="border-gray-200/60 dark:border-gray-800/60"
+                >
+                  <Share className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedCommunication(null)}
+                  className="border-gray-200/60 dark:border-gray-800/60"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">
               {selectedCommunication.type.charAt(0).toUpperCase() + selectedCommunication.type.slice(1).replace('-', ' ')}
@@ -312,6 +337,13 @@ export default function CommunicationCoach({ communications, onAddCommunication,
           </div>
         </div>
       )}
+      <ShareModal
+        isOpen={shareModal.isOpen}
+        onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
+        messageContent={shareModal.content}
+        contentType="Leadership · Communication"
+        contentTitle={shareModal.title}
+      />
     </div>
   )
 }

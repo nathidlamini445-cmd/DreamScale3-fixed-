@@ -35,6 +35,8 @@ import {
   ChevronRight
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import { parseAnalysisMarkdown } from '@/lib/competitive-intelligence/parse-analysis-markdown'
+import { competitiveReportMarkdownComponents } from '@/lib/competitive-intelligence/report-markdown'
 
 interface SkillRating {
   innovation: number
@@ -73,43 +75,9 @@ const COLORS = {
 // Minimalist chart colors - softer, more muted
 const CHART_COLORS = ['#6366f1', '#8b5cf6', '#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0']
 
-// Helper function to parse analysis sections
+// Parse analysis sections (supports ## and ### headers from Gemini)
 function parseAnalysisSections(markdown: string) {
-  const sections: { title: string; content: string }[] = []
-  const lines = markdown.split('\n')
-  let currentSectionTitle = ''
-  let currentSectionContent: string[] = []
-
-  // Skip the main title if present
-  let startIndex = 0
-  if (lines[0]?.startsWith('#')) {
-    startIndex = 1
-  }
-
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i]
-    if (line.startsWith('## ')) {
-      if (currentSectionTitle) {
-        sections.push({
-          title: currentSectionTitle,
-          content: currentSectionContent.join('\n').trim()
-        })
-      }
-      currentSectionTitle = line.substring(3).trim()
-      currentSectionContent = []
-    } else {
-      currentSectionContent.push(line)
-    }
-  }
-
-  if (currentSectionTitle) {
-    sections.push({
-      title: currentSectionTitle,
-      content: currentSectionContent.join('\n').trim()
-    })
-  }
-
-  return sections
+  return parseAnalysisMarkdown(markdown).sections
 }
 
 export default function CompetitiveIntelligenceDashboard({ 
@@ -380,74 +348,9 @@ export default function CompetitiveIntelligenceDashboard({
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-6 px-8 max-h-[600px] overflow-y-auto">
-              <div className="prose prose-base max-w-none dark:prose-invert prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-white prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300">
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => <p className="mb-4 text-base leading-relaxed text-gray-700 dark:text-gray-300">{children}</p>,
-                    ul: ({ children }) => {
-                      // Filter out empty list items
-                      const validChildren = React.Children.toArray(children).filter((child: any) => {
-                        if (typeof child === 'string') return child.trim().length > 0
-                        if (child?.props?.children) {
-                          const text = typeof child.props.children === 'string' 
-                            ? child.props.children 
-                            : React.Children.toArray(child.props.children).join('')
-                          return text.trim().length > 0
-                        }
-                        return false
-                      })
-                      if (validChildren.length === 0) return null
-                      // Remove list styling since items will be rendered as headings
-                      return <div className="mb-4 space-y-3">{validChildren}</div>
-                    },
-                    ol: ({ children }) => {
-                      // Filter out empty list items
-                      const validChildren = React.Children.toArray(children).filter((child: any) => {
-                        if (typeof child === 'string') return child.trim().length > 0
-                        if (child?.props?.children) {
-                          const text = typeof child.props.children === 'string' 
-                            ? child.props.children 
-                            : React.Children.toArray(child.props.children).join('')
-                          return text.trim().length > 0
-                        }
-                        return false
-                      })
-                      if (validChildren.length === 0) return null
-                      return <ol className="mb-4 space-y-2 text-base list-decimal list-inside pl-4">{validChildren}</ol>
-                    },
-                    li: ({ children }) => {
-                      // Don't render if empty or only whitespace
-                      const text = typeof children === 'string' 
-                        ? children 
-                        : React.Children.toArray(children).join('')
-                      if (!text || text.trim().length === 0) return null
-                      
-                      // Check if this looks like a title (has colon followed by description)
-                      const trimmedText = text.trim()
-                      const hasColon = trimmedText.includes(':')
-                      const parts = hasColon ? trimmedText.split(':') : []
-                      const titlePart = parts[0]?.trim() || ''
-                      const descriptionPart = parts.slice(1).join(':').trim()
-                      
-                      // If it has a colon and the title part is relatively short (likely a title), render as heading
-                      if (hasColon && titlePart.length > 0 && titlePart.length < 100 && descriptionPart.length > 0) {
-                        return (
-                          <div className="mb-3">
-                            <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-2">{titlePart}:</h5>
-                            <p className="text-base leading-relaxed text-gray-700 dark:text-gray-300 ml-0">{descriptionPart}</p>
-                          </div>
-                        )
-                      }
-                      
-                      // Otherwise render as normal list item
-                      return <li className="text-base leading-relaxed text-gray-700 dark:text-gray-300">{children}</li>
-                    },
-                    strong: ({ children }) => <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>,
-                    h3: ({ children }) => <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 mt-5">{children}</h3>,
-                    h4: ({ children }) => <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2 mt-4">{children}</h4>,
-                  }}
-                >
+            <CardContent className="p-6 px-8 max-h-[min(80vh,900px)] overflow-y-auto">
+              <div className="prose prose-base max-w-none dark:prose-invert">
+                <ReactMarkdown components={competitiveReportMarkdownComponents}>
                   {analysisSections[currentSectionIndex]?.content || ''}
                 </ReactMarkdown>
               </div>
@@ -516,74 +419,9 @@ export default function CompetitiveIntelligenceDashboard({
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-6 px-8 max-h-[600px] overflow-y-auto">
-              <div className="prose prose-base max-w-none dark:prose-invert prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-white prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300">
-                <ReactMarkdown
-                  components={{
-                    p: ({ children }) => <p className="mb-4 text-base leading-relaxed text-gray-700 dark:text-gray-300">{children}</p>,
-                    ul: ({ children }) => {
-                      // Filter out empty list items
-                      const validChildren = React.Children.toArray(children).filter((child: any) => {
-                        if (typeof child === 'string') return child.trim().length > 0
-                        if (child?.props?.children) {
-                          const text = typeof child.props.children === 'string' 
-                            ? child.props.children 
-                            : React.Children.toArray(child.props.children).join('')
-                          return text.trim().length > 0
-                        }
-                        return false
-                      })
-                      if (validChildren.length === 0) return null
-                      // Remove list styling since items will be rendered as headings
-                      return <div className="mb-4 space-y-3">{validChildren}</div>
-                    },
-                    ol: ({ children }) => {
-                      // Filter out empty list items
-                      const validChildren = React.Children.toArray(children).filter((child: any) => {
-                        if (typeof child === 'string') return child.trim().length > 0
-                        if (child?.props?.children) {
-                          const text = typeof child.props.children === 'string' 
-                            ? child.props.children 
-                            : React.Children.toArray(child.props.children).join('')
-                          return text.trim().length > 0
-                        }
-                        return false
-                      })
-                      if (validChildren.length === 0) return null
-                      return <ol className="mb-4 space-y-2 text-base list-decimal list-inside pl-4">{validChildren}</ol>
-                    },
-                    li: ({ children }) => {
-                      // Don't render if empty or only whitespace
-                      const text = typeof children === 'string' 
-                        ? children 
-                        : React.Children.toArray(children).join('')
-                      if (!text || text.trim().length === 0) return null
-                      
-                      // Check if this looks like a title (has colon followed by description)
-                      const trimmedText = text.trim()
-                      const hasColon = trimmedText.includes(':')
-                      const parts = hasColon ? trimmedText.split(':') : []
-                      const titlePart = parts[0]?.trim() || ''
-                      const descriptionPart = parts.slice(1).join(':').trim()
-                      
-                      // If it has a colon and the title part is relatively short (likely a title), render as heading
-                      if (hasColon && titlePart.length > 0 && titlePart.length < 100 && descriptionPart.length > 0) {
-                        return (
-                          <div className="mb-3">
-                            <h5 className="text-base font-semibold text-gray-900 dark:text-white mb-2">{titlePart}:</h5>
-                            <p className="text-base leading-relaxed text-gray-700 dark:text-gray-300 ml-0">{descriptionPart}</p>
-                          </div>
-                        )
-                      }
-                      
-                      // Otherwise render as normal list item
-                      return <li className="text-base leading-relaxed text-gray-700 dark:text-gray-300">{children}</li>
-                    },
-                    strong: ({ children }) => <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>,
-                    h3: ({ children }) => <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 mt-5">{children}</h3>,
-                    h4: ({ children }) => <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2 mt-4">{children}</h4>,
-                  }}
-                >
+            <CardContent className="p-6 px-8 max-h-[min(80vh,900px)] overflow-y-auto">
+              <div className="prose prose-base max-w-none dark:prose-invert">
+                <ReactMarkdown components={competitiveReportMarkdownComponents}>
                   {competitiveIntelligenceSections[currentIntelligenceIndex]?.content || ''}
                 </ReactMarkdown>
               </div>

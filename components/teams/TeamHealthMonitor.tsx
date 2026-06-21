@@ -1,30 +1,39 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Heart, AlertTriangle, TrendingUp, TrendingDown, Minus } from "lucide-react"
-import type { TeamHealthMonitor } from '@/lib/teams-types'
+import { Loader2, Heart, AlertTriangle, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react"
+import type { TeamHealthMonitor, TeamMember } from '@/lib/teams-types'
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { AIResponse } from '@/components/ai-response'
 import { AnalysisItemCard } from './AnalysisItemCard'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import Link from 'next/link'
 
 interface TeamHealthMonitorProps {
   monitors: TeamHealthMonitor[]
+  members: TeamMember[]
   onAddMonitor: (monitor: TeamHealthMonitor) => void
   onDeleteMonitor?: (id: string) => void
 }
 
-export default function TeamHealthMonitor({ monitors, onAddMonitor, onDeleteMonitor }: TeamHealthMonitorProps) {
+export default function TeamHealthMonitor({ monitors, members, onAddMonitor, onDeleteMonitor }: TeamHealthMonitorProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [teamName, setTeamName] = useState('')
   const [teamSize, setTeamSize] = useState('')
   const [currentChallenges, setCurrentChallenges] = useState('')
   const [recentChanges, setRecentChanges] = useState('')
   const [teamConcerns, setTeamConcerns] = useState('')
+
+  useEffect(() => {
+    if (!teamSize && members.length > 0) {
+      setTeamSize(String(members.length))
+    }
+  }, [members.length, teamSize])
 
   const handleAnalyze = async () => {
     if (!teamName.trim()) {
@@ -45,6 +54,13 @@ export default function TeamHealthMonitor({ monitors, onAddMonitor, onDeleteMoni
           teamConcerns: teamConcerns.trim() || undefined
         })
       })
+
+      if (response.status === 429) {
+        toast.error('Monthly AI limit reached', {
+          description: 'Upgrade to Pro for unlimited TeamSync AI runs.',
+        })
+        return
+      }
 
       if (!response.ok) {
         throw new Error('Failed to analyze team health')
@@ -289,6 +305,15 @@ export default function TeamHealthMonitor({ monitors, onAddMonitor, onDeleteMoni
                                   ))}
                                 </ul>
                               </div>
+                            )}
+                            {warning.type === 'conflict' && (
+                              <Link
+                                href="/leadership"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2"
+                              >
+                                Resolve in Leadership
+                                <ArrowRight className="w-3 h-3" />
+                              </Link>
                             )}
                           </div>
                         ))}

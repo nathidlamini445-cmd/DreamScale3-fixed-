@@ -16,7 +16,7 @@ export async function GET() {
       const supabase = createClient(url, key)
       const { data } = await supabase
         .from('user_profiles')
-        .select('subscription_tier, subscription_status')
+        .select('subscription_tier, subscription_status, subscription_ends_at, subscription_activated_at')
         .eq('id', user.id)
         .maybeSingle()
       isPro = isDreamScalePro(data)

@@ -14,6 +14,7 @@ import { useSessionSafe } from "@/lib/session-context"
 import { useUser } from "@clerk/nextjs"
 import * as supabaseData from "@/lib/supabase-data"
 import { ShareModal } from "@/components/share-modal"
+import { toast } from "sonner"
 
 interface SavedSOP {
   id: string
@@ -47,11 +48,12 @@ export default function ProcessDocumentation({ systems }: ProcessDocumentationPr
     title: ''
   })
   
-  // Reload SOPs when tab becomes active (documentation tab)
+  // Reload SOPs when tab becomes active (documentation tab).
+  // Signed-in users are covered by the Supabase mount/focus loader below —
+  // reading localStorage here would overwrite synced data with stale local copies.
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'documentation') {
-      // Reload SOPs when documentation tab is active
+    if (tab === 'documentation' && !user?.id) {
       const loadSOPs = () => {
         // Prevent saving during reload
         isSavingRef.current = true
@@ -83,7 +85,7 @@ export default function ProcessDocumentation({ systems }: ProcessDocumentationPr
       }
       loadSOPs()
     }
-  }, [searchParams])
+  }, [searchParams, user?.id])
 
   const selectedSystem = systems.find(s => s.id === selectedSystemId)
   const selectedWorkflow = selectedSystem?.workflows.find(w => w.id === selectedWorkflowId)
@@ -324,7 +326,9 @@ export default function ProcessDocumentation({ systems }: ProcessDocumentationPr
       }, 100)
     } catch (error) {
       console.error('Failed to generate SOP:', error)
-      alert('Failed to generate SOP. Please try again.')
+      toast.error('Failed to generate SOP', {
+        description: 'Please try again in a moment.',
+      })
     } finally {
       setIsGenerating(false)
     }

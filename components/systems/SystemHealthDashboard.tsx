@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import { BusinessSystem } from "./SystemBuilder"
 import SystemCard from "./SystemCard"
 
@@ -12,12 +13,18 @@ interface SystemHealthDashboardProps {
   systems: BusinessSystem[]
   onSystemUpdate?: (system: BusinessSystem) => void
   onDeleteSystem?: (systemId: string) => void
+  onViewDetails?: (system: BusinessSystem) => void
+  viewDetailsBasePath?: string
+  readOnly?: boolean
 }
 
 export default function SystemHealthDashboard({ 
   systems, 
   onSystemUpdate,
-  onDeleteSystem
+  onDeleteSystem,
+  onViewDetails,
+  viewDetailsBasePath,
+  readOnly = false,
 }: SystemHealthDashboardProps) {
   const healthyCount = systems.filter(s => s.status === 'healthy').length
   const needsAttentionCount = systems.filter(s => s.status === 'needs-attention').length
@@ -41,12 +48,25 @@ export default function SystemHealthDashboard({
         onSystemUpdate({
           ...system,
           status: analysis.status,
-          lastAnalyzed: new Date()
+          lastAnalyzed: new Date(),
+          healthAnalysis: {
+            score: typeof analysis.score === 'number' ? analysis.score : undefined,
+            recommendations: Array.isArray(analysis.recommendations)
+              ? analysis.recommendations
+              : [],
+            issues: Array.isArray(analysis.issues) ? analysis.issues : [],
+            strengths: Array.isArray(analysis.strengths) ? analysis.strengths : [],
+          },
         })
       }
+      toast.success('Health analysis complete', {
+        description: `${system.name}: ${String(analysis.status).replace('-', ' ')}`,
+      })
     } catch (error) {
       console.error('Failed to analyze system health:', error)
-      alert('Failed to analyze system health. Please try again.')
+      toast.error('Health analysis failed', {
+        description: 'Please try again in a moment.',
+      })
     }
   }
 
@@ -143,8 +163,14 @@ export default function SystemHealthDashboard({
           <SystemCard
             key={system.id}
             system={system}
-            onAnalyzeHealth={() => handleAnalyzeHealth(system)}
+            readOnly={readOnly}
+            onAnalyzeHealth={readOnly ? undefined : () => handleAnalyzeHealth(system)}
+            onSystemUpdate={onSystemUpdate}
             onDelete={onDeleteSystem ? () => onDeleteSystem(system.id) : undefined}
+            onViewDetails={onViewDetails ? () => onViewDetails(system) : undefined}
+            viewDetailsHref={
+              viewDetailsBasePath ? `${viewDetailsBasePath}/${system.id}` : undefined
+            }
           />
         ))}
       </div>

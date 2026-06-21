@@ -10,6 +10,12 @@ const isPublicRoute = createRouteMatcher([
   '/api/payfast/itn(.*)',
   // Billing + post-checkout (PayFast return may arrive before session refresh)
   '/billing(.*)',
+  '/invite(.*)',
+  '/join(.*)',
+  '/guest(.*)',
+  '/api/invite(.*)',
+  '/api/join(.*)',
+  '/api/guest(.*)',
   // The data proxy enforces its own Clerk auth + per-user scoping in the handler and
   // also serves signed-out public inserts (e.g. landing-page email capture), so it must
   // not be blocked by middleware (which renders 404 for unauthenticated requests).

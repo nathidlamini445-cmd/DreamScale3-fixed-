@@ -19,8 +19,8 @@ const sb = createClient(
 
 const emails = [
   'narhidlamini445@gmail.com',
-  'rashidlamni445@gmail.com',
-  'clamininkosinathi665@gmail.com',
+  'nervenet450@gmail.com',
+  'nathidlamini445@gmail.com',
 ]
 
 for (const email of emails) {

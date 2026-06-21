@@ -77,17 +77,37 @@ export const STREAK_MILESTONES: StreakMilestone[] = [
   }
 ];
 
+/** Calendar-day difference (local midnight to midnight). */
+export function daysSinceLastActiveMidnight(
+  lastActiveDate: Date,
+  today: Date = new Date()
+): number {
+  const lastMidnight = new Date(
+    lastActiveDate.getFullYear(),
+    lastActiveDate.getMonth(),
+    lastActiveDate.getDate()
+  )
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  )
+  return Math.floor(
+    (todayMidnight.getTime() - lastMidnight.getTime()) / (1000 * 60 * 60 * 24)
+  )
+}
+
 export function calculateStreakStatus(
   streakData: StreakData,
   today: Date = new Date()
 ): StreakStatus {
-  const lastActive = new Date(streakData.lastActiveDate);
-  const daysSinceLastActive = Math.floor(
-    (today.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysSinceLastActive = daysSinceLastActiveMidnight(
+    streakData.lastActiveDate,
+    today
+  )
 
-  // Streak is active if last activity was yesterday or today
-  const isActive = daysSinceLastActive <= 1;
+  // Duolingo-style: streak is alive if you practiced yesterday or today
+  const isActive = daysSinceLastActive <= 1
   
   // Days until streak resets (if no activity today)
   const daysUntilReset = isActive ? 0 : 1;
@@ -109,87 +129,105 @@ export function calculateStreakStatus(
 }
 
 /**
- * Checks if the streak should be reset based on time elapsed since last activity
- * Returns true if more than 24 hours (1 day) has passed since last activity
+ * Duolingo-style: if you skipped a full calendar day, streak breaks to 0 on load.
+ * Does not fake activity — lastActiveDate is preserved.
  */
-export function shouldResetStreak(
+export function syncStreakOnDayChange(
   streakData: StreakData,
-  currentDate: Date = new Date()
-): boolean {
-  const lastActive = new Date(streakData.lastActiveDate);
-  
-  // Calculate hours difference
-  const hoursSinceLastActive = (currentDate.getTime() - lastActive.getTime()) / (1000 * 60 * 60);
-  
-  // If more than 24 hours have passed, streak should be reset
-  return hoursSinceLastActive > 24;
+  today: Date = new Date()
+): StreakData {
+  const lastActive = new Date(streakData.lastActiveDate)
+  if (!lastActive.getTime() || Number.isNaN(lastActive.getTime())) {
+    return { ...streakData, currentStreak: 0 }
+  }
+
+  const daysSince = daysSinceLastActiveMidnight(lastActive, today)
+
+  if (daysSince > 1 && streakData.currentStreak > 0) {
+    return {
+      ...streakData,
+      currentStreak: 0,
+    }
+  }
+
+  return streakData
 }
 
-/**
- * Resets the streak to 1 if more than 24 hours have passed
- * This should be called on page load to check if streak needs resetting
- */
+/** Alias for syncStreakOnDayChange */
+export const syncStreakOnLoad = syncStreakOnDayChange
+
+/** @deprecated Use syncStreakOnDayChange — kept for imports */
 export function checkAndResetStreakIfNeeded(
   streakData: StreakData,
   currentDate: Date = new Date()
 ): StreakData {
-  if (shouldResetStreak(streakData, currentDate)) {
-    // More than 24 hours passed - reset streak to 1
-    return {
-      ...streakData,
-      currentStreak: 1,
-      streakStartDate: currentDate,
-      lastActiveDate: currentDate
-    };
-  }
-  
-  // Streak is still valid - return as is
-  return streakData;
+  return syncStreakOnDayChange(streakData, currentDate)
+}
+
+export function shouldResetStreak(
+  streakData: StreakData,
+  currentDate: Date = new Date()
+): boolean {
+  return (
+    daysSinceLastActiveMidnight(streakData.lastActiveDate, currentDate) > 1 &&
+    streakData.currentStreak > 0
+  )
 }
 
 export function updateStreak(
   streakData: StreakData,
   activityDate: Date = new Date()
 ): StreakData {
-  const lastActive = new Date(streakData.lastActiveDate);
-  
-  // Normalize dates to midnight for accurate day comparison
-  const lastActiveMidnight = new Date(lastActive.getFullYear(), lastActive.getMonth(), lastActive.getDate());
-  const activityMidnight = new Date(activityDate.getFullYear(), activityDate.getMonth(), activityDate.getDate());
-  
-  // Calculate days difference using normalized dates
-  const daysSinceLastActive = Math.floor(
-    (activityMidnight.getTime() - lastActiveMidnight.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysSinceLastActive = daysSinceLastActiveMidnight(
+    new Date(streakData.lastActiveDate),
+    activityDate
+  )
 
-  let newStreakData = { ...streakData };
+  let newStreakData = { ...streakData }
 
   if (daysSinceLastActive === 0) {
-    // Same day - no change to streak, but update lastActiveDate to current time
-    newStreakData.lastActiveDate = activityDate;
-    return newStreakData;
-  } else if (daysSinceLastActive === 1) {
-    // Consecutive day - increment streak
-    newStreakData.currentStreak += 1;
+    if (newStreakData.currentStreak === 0) {
+      newStreakData.currentStreak = 1
+      newStreakData.longestStreak = Math.max(
+        1,
+        newStreakData.longestStreak
+      )
+      newStreakData.streakStartDate = activityDate
+      newStreakData.totalDaysActive += 1
+    }
+    newStreakData.lastActiveDate = activityDate
+    return newStreakData
+  }
+
+  if (daysSinceLastActive === 1) {
+    newStreakData.currentStreak += 1
     newStreakData.longestStreak = Math.max(
       newStreakData.longestStreak,
       newStreakData.currentStreak
-    );
-    newStreakData.lastActiveDate = activityDate;
-    newStreakData.totalDaysActive += 1;
-  } else if (daysSinceLastActive > 1) {
-    // Streak broken - reset to 1 (more than 1 day has passed)
-    newStreakData.currentStreak = 1;
-    newStreakData.streakStartDate = activityDate;
-    newStreakData.lastActiveDate = activityDate;
-    newStreakData.totalDaysActive += 1;
-  } else {
-    // Negative days (shouldn't happen, but preserve streak if it does)
-    // This handles edge cases where dates might be slightly off
-    newStreakData.lastActiveDate = activityDate;
+    )
+    newStreakData.lastActiveDate = activityDate
+    newStreakData.totalDaysActive += 1
+    return newStreakData
   }
 
-  return newStreakData;
+  if (daysSinceLastActive > 1) {
+    newStreakData.currentStreak = 1
+    newStreakData.streakStartDate = activityDate
+    newStreakData.lastActiveDate = activityDate
+    newStreakData.totalDaysActive += 1
+    return newStreakData
+  }
+
+  newStreakData.lastActiveDate = activityDate
+  return newStreakData
+}
+
+/** Award streak credit when the user completes meaningful work today. */
+export function applyTodayActivityToStreak(
+  streakData: StreakData,
+  activityDate: Date = new Date()
+): StreakData {
+  return updateStreak(streakData, activityDate)
 }
 
 export function getStreakMultiplier(streak: number): number {
@@ -323,4 +361,20 @@ export function predictStreakOutcome(
     predicted90Days,
     confidence
   };
+}
+
+/** Build a 7-day (Sun–Sat) completion array for streak UI */
+export function buildWeeklyProgress(
+  currentStreak: number,
+  todayCompleted = true
+): number[] {
+  const progress = [0, 0, 0, 0, 0, 0, 0]
+  if (!todayCompleted || currentStreak <= 0) return progress
+
+  const todayIdx = new Date().getDay()
+  progress[todayIdx] = 1
+  for (let i = 1; i < currentStreak && i < 7; i++) {
+    progress[(todayIdx - i + 7) % 7] = 1
+  }
+  return progress
 }

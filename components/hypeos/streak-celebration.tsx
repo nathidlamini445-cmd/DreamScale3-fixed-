@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,16 @@ interface StreakCelebrationProps {
   weeklyProgress: number[];
 }
 
-export default function StreakCelebration({ 
+function buildFallbackWeek(streak: number, todayIdx: number) {
+  const w = [0, 0, 0, 0, 0, 0, 0];
+  if (streak > 0) {
+    w[todayIdx] = 1;
+    for (let i = 1; i < streak && i < 7; i++) w[(todayIdx - i + 7) % 7] = 1;
+  }
+  return w;
+}
+
+export default function StreakCelebration({
   isOpen, 
   onClose, 
   currentStreak, 
@@ -93,10 +102,8 @@ export default function StreakCelebration({
   const motivationalMessage = getMotivationalMessage(currentStreak);
 
   const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
-  // Adjust for current day - if today is Saturday (6), show Saturday as completed
-  const adjustedToday = today === 6 ? 6 : today; // Saturday is index 6
+  const today = new Date().getDay();
+  const week = weeklyProgress?.length === 7 ? weeklyProgress : buildFallbackWeek(currentStreak, today);
 
   return (
     <AnimatePresence>
@@ -118,7 +125,7 @@ export default function StreakCelebration({
             {/* Main Celebration Card */}
             <div className="bg-gradient-to-br from-white via-gray-50 to-white dark:from-slate-800 dark:via-slate-700 dark:to-slate-900 rounded-3xl p-8 shadow-2xl border-2 border-gray-200 dark:border-slate-600">
               
-              {/* Target Icon */}
+              {/* Streak flame */}
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -126,13 +133,13 @@ export default function StreakCelebration({
                 className="flex justify-center mb-6"
               >
                 <div className="relative">
-                  <Target className="h-16 w-16 text-[#39d2c0] drop-shadow-lg" style={{ filter: 'drop-shadow(0 0 20px #39d2c0)' }} />
+                  <Flame className="h-16 w-16 text-orange-500 drop-shadow-lg" style={{ filter: 'drop-shadow(0 0 20px #f97316)' }} />
                   <motion.div
                     animate={{ scale: [1, 1.1, 1] }}
                     transition={{ duration: 2, repeat: Infinity }}
                     className="absolute inset-0"
                   >
-                    <Target className="h-16 w-16 text-[#39d2c0] opacity-60" style={{ filter: 'drop-shadow(0 0 15px #39d2c0)' }} />
+                    <Flame className="h-16 w-16 text-orange-400 opacity-60" style={{ filter: 'drop-shadow(0 0 15px #fb923c)' }} />
                   </motion.div>
                 </div>
               </motion.div>
@@ -170,12 +177,14 @@ export default function StreakCelebration({
                 {/* Days of Week */}
                 <div className="flex justify-between mb-3">
                   {daysOfWeek.map((day, index) => (
-                    <span 
+                    <span
                       key={index}
                       className={`text-sm font-medium ${
-                        index === adjustedToday 
-                          ? 'text-[#39d2c0] dark:text-blue-400' 
-                          : 'text-gray-500 dark:text-gray-500'
+                        index === today
+                          ? 'text-orange-500'
+                          : week[index]
+                            ? 'text-gray-700 dark:text-gray-300'
+                            : 'text-gray-400 dark:text-gray-500'
                       }`}
                     >
                       {day}
@@ -183,41 +192,49 @@ export default function StreakCelebration({
                   ))}
                 </div>
 
-                {/* Target Progress Icons */}
+                {/* Week streak row (Duolingo-style) */}
                 <div className="relative mb-4">
-                  <div className="flex justify-between items-center">
-                    {daysOfWeek.map((day, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ 
-                          opacity: (index === adjustedToday && currentStreak > 0) ? 1 : 0.3, 
-                          scale: (index === adjustedToday && currentStreak > 0) ? 1 : 0.8 
-                        }}
-                        transition={{ delay: 0.8 + (index * 0.1), duration: 0.5 }}
-                        className="flex flex-col items-center"
-                      >
-                        <Target 
-                          className={`h-6 w-6 ${
-                            (index === adjustedToday && currentStreak > 0)
-                              ? 'text-[#39d2c0]' 
-                              : 'text-gray-500'
-                          }`} 
-                          style={{ 
-                            filter: (index === adjustedToday && currentStreak > 0)
-                              ? 'drop-shadow(0 0 8px #39d2c0)' 
-                              : 'none' 
-                          }} 
-                        />
-                        <span className={`text-xs mt-1 ${
-                          (index === adjustedToday && currentStreak > 0)
-                            ? 'text-gray-900 dark:text-white' 
-                            : 'text-gray-500'
-                        }`}>
-                          {day}
-                        </span>
-                      </motion.div>
-                    ))}
+                  <div className="flex justify-between items-end">
+                    {daysOfWeek.map((day, index) => {
+                      const done = week[index] === 1
+                      const isToday = index === today
+                      return (
+                        <motion.div
+                          key={index}
+                          initial={{ opacity: 0, scale: 0 }}
+                          animate={{
+                            opacity: done ? 1 : 0.35,
+                            scale: isToday && done ? 1.1 : done ? 1 : 0.85,
+                          }}
+                          transition={{ delay: 0.8 + index * 0.08, duration: 0.4 }}
+                          className="flex flex-col items-center gap-1"
+                        >
+                          <div
+                            className={`flex h-9 w-9 items-center justify-center rounded-full border-2 ${
+                              done
+                                ? 'border-orange-400 bg-orange-500/15'
+                                : 'border-gray-300 dark:border-gray-600 bg-transparent'
+                            } ${isToday ? 'ring-2 ring-orange-400/40' : ''}`}
+                          >
+                            {done ? (
+                              <Flame
+                                className="h-5 w-5 text-orange-500"
+                                style={{ filter: 'drop-shadow(0 0 6px #f97316)' }}
+                              />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600" />
+                            )}
+                          </div>
+                          <span
+                            className={`text-[10px] ${
+                              isToday ? 'font-bold text-orange-500' : 'text-gray-500'
+                            }`}
+                          >
+                            {day}
+                          </span>
+                        </motion.div>
+                      )
+                    })}
                   </div>
                 </div>
 

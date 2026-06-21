@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { cn } from '@/lib/utils'
 import { ShareModal } from '@/components/share-modal'
+import { formatScenarioForShare, formatScenarioForSheet } from '@/lib/revenue/format-revenue-export'
 
 interface ScenarioPlanningProps {
   scenarios: ScenarioPlan[]
@@ -23,10 +24,15 @@ export default function ScenarioPlanning({ scenarios, onAddScenario }: ScenarioP
   const router = useRouter()
   const pathname = usePathname()
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [shareModal, setShareModal] = useState<{isOpen: boolean, content: string, title: string}>({
+  const [shareModal, setShareModal] = useState<{
+    isOpen: boolean
+    content: string
+    title: string
+    sheetExport?: ReturnType<typeof formatScenarioForSheet>
+  }>({
     isOpen: false,
     content: '',
-    title: ''
+    title: '',
   })
 
   // Clear loading state when route changes (navigation completed) or after timeout
@@ -262,30 +268,11 @@ export default function ScenarioPlanning({ scenarios, onAddScenario }: ScenarioP
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          // Format scenario for sharing
-                          let content = `# Scenario: ${scenario.name}\n\n`
-                          content += `**Scenario:** ${scenario.scenario}\n\n`
-                          if (scenario.variables.length > 0) {
-                            content += `## Variables\n\n`
-                            scenario.variables.forEach(variable => {
-                              content += `- **${variable.name}:** ${variable.change} (Value: ${variable.value})\n`
-                            })
-                            content += `\n`
-                          }
-                          if (scenario.projections.length > 0) {
-                            content += `## Revenue Projections\n\n`
-                            scenario.projections.forEach(projection => {
-                              content += `- **${projection.month}:** ${formatCurrency(projection.revenue)} (Impact: ${formatCurrency(projection.impact)})\n`
-                            })
-                            content += `\n`
-                          }
-                          if (scenario.analysis?.summary) {
-                            content += `## Analysis\n\n${scenario.analysis.summary}\n\n`
-                          }
                           setShareModal({
                             isOpen: true,
-                            content,
-                            title: scenario.name
+                            content: formatScenarioForShare(scenario),
+                            title: scenario.name,
+                            sheetExport: formatScenarioForSheet(scenario),
                           })
                         }}
                         className="border-gray-200/60 dark:border-gray-800/60"
@@ -326,8 +313,9 @@ export default function ScenarioPlanning({ scenarios, onAddScenario }: ScenarioP
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType="Revenue Scenario"
+        contentType="Revenue · Scenario Planning"
         contentTitle={shareModal.title}
+        revenueOsSheets={shareModal.sheetExport}
       />
     </div>
   )

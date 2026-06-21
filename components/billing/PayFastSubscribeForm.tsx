@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import type { PayfastSubscribeFormConfig } from '@/lib/payfast/subscribe-form'
 import { formatProChargeSummary } from '@/lib/billing/pro-price'
 
@@ -24,9 +25,19 @@ function isLocalBillingHost(): boolean {
 }
 
 export function PayFastSubscribeForm({ config, userId, userEmail }: Props) {
-  const mPaymentId = userId ? paymentReferenceForUser(userId) : `DS-guest-${Date.now()}`
-  const blockLiveCheckout =
-    process.env.NODE_ENV === 'development' && isLocalBillingHost()
+  const [mounted, setMounted] = useState(false)
+  const [mPaymentId, setMPaymentId] = useState('')
+  const [blockLiveCheckout, setBlockLiveCheckout] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    setMPaymentId(
+      userId ? paymentReferenceForUser(userId) : `DS-guest-${Date.now()}`
+    )
+    setBlockLiveCheckout(
+      process.env.NODE_ENV === 'development' && isLocalBillingHost()
+    )
+  }, [userId])
 
   return (
     <div className="space-y-4">
@@ -36,7 +47,7 @@ export function PayFastSubscribeForm({ config, userId, userEmail }: Props) {
         </p>
       )}
 
-      {blockLiveCheckout && (
+      {mounted && blockLiveCheckout && (
         <p className="text-xs text-amber-700 dark:text-amber-300 text-center max-w-sm mx-auto">
           Live PayFast checkout is disabled on localhost (403 from PayFast). Use{' '}
           <strong>Activate Pro locally</strong> above, or test on a public HTTPS URL.

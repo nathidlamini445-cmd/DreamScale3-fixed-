@@ -714,25 +714,36 @@ export async function loadRevenueData(userId: string): Promise<any | null> {
 // ============================================
 
 export async function saveLeadershipData(userId: string, leadershipData: any): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from('leadership_data')
-      .upsert({
-        user_id: userId,
-        style_assessment: leadershipData.styleAssessment || null,
-        decisions: leadershipData.decisions || [],
-        communications: leadershipData.communications || [],
-        conflicts: leadershipData.conflicts || [],
-        routines: leadershipData.routines || [],
-        challenges: leadershipData.challenges || [],
-        feedback_360: leadershipData.feedback360 || [],
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id'
-      })
+  const basePayload = {
+    user_id: userId,
+    style_assessment: leadershipData.styleAssessment || null,
+    decisions: leadershipData.decisions || [],
+    communications: leadershipData.communications || [],
+    conflicts: leadershipData.conflicts || [],
+    routines: leadershipData.routines || [],
+    challenges: leadershipData.challenges || [],
+    feedback_360: leadershipData.feedback360 || [],
+    updated_at: new Date().toISOString(),
+  }
 
+  try {
+    const { error } = await supabase.from('leadership_data').upsert(
+      {
+        ...basePayload,
+        problem_solver_advice: leadershipData.problemSolverAdvice || [],
+      },
+      { onConflict: 'user_id' }
+    )
     if (error) throw error
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/problem_solver_advice/i.test(message)) {
+      const { error: retryError } = await supabase.from('leadership_data').upsert(basePayload, {
+        onConflict: 'user_id',
+      })
+      if (retryError) throw retryError
+      return
+    }
     console.error('Error saving leadership data:', error)
     throw error
   }
@@ -757,7 +768,8 @@ export async function loadLeadershipData(userId: string): Promise<any | null> {
       conflicts: data.conflicts || [],
       routines: data.routines || [],
       challenges: data.challenges || [],
-      feedback360: data.feedback_360 || []
+      feedback360: data.feedback_360 || [],
+      problemSolverAdvice: Array.isArray(data.problem_solver_advice) ? data.problem_solver_advice : [],
     }
   } catch (error) {
     console.error('Error loading leadership data:', error)

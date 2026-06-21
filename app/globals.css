@@ -545,21 +545,49 @@ ol::-moz-selection {
   color: var(--muted-foreground) !important;
 }
 
-/* Force all text to be white in dark mode */
-.dark {
-  color: #ffffff !important;
-}
-
-.dark * {
-  color: inherit !important;
-}
-
+/* Override common light-mode text utilities in dark mode */
 .dark .text-black,
 .dark .text-gray-900,
 .dark .text-gray-800,
 .dark .text-gray-700,
-.dark .text-gray-600 {
-  color: #ffffff !important;
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-gray-400 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-300 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-slate-600,
+.dark .text-slate-500 {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-300 {
+  color: #94a3b8 !important;
+}
+
+/* Pro pill — dark text on white badge (all pages, nav, headers, cards) */
+.dark .pro-plan-badge,
+.dark .pro-plan-badge *,
+.dark .pro-plan-badge span {
+  color: #1f2937 !important;
+}
+
+.dark .pro-plan-badge svg {
+  color: #005dff !important;
 }
 
 /* Force FlowMatch icons to be blue - ONLY in dark mode */
@@ -1300,12 +1328,21 @@ ol::-moz-selection {
   color: white !important;
 }
 
-.dark aside.fixed nav a:not([class*="bg-gray-700"]):not([class*="bg-gray-800"]) *,
-.dark aside.fixed nav a:not([class*="bg-gray-700"]):not([class*="bg-gray-800"]) svg,
 .dark aside.fixed nav a:not([class*="bg-gray-700"]):not([class*="bg-gray-800"]) span,
 .dark aside.fixed nav a:not([class*="bg-gray-700"]):not([class*="bg-gray-800"]) .lucide,
 .dark aside.fixed nav a:not([class*="bg-gray-700"]):not([class*="bg-gray-800"]) [class*="w-5"] {
   color: white !important;
+}
+
+/* Pro pill on sidebar — dark text on white badge (not inherited nav white) */
+.dark aside.fixed nav a .pro-plan-badge,
+.dark aside.fixed nav a .pro-plan-badge *,
+.dark aside.fixed nav a .pro-plan-badge span {
+  color: #1f2937 !important;
+}
+
+.dark aside.fixed nav a .pro-plan-badge svg {
+  color: #005dff !important;
 }
 
 /* Calendar empty state icon override */
@@ -1347,7 +1384,7 @@ body > *:not(aside.fixed) {
 main.pl-64,
 main[class*="pl-64"],
 main[class*="ml-64"],
-main[class*="flex-1"] {
+main[class*="flex-1"]:not([data-guest-main]) {
   /* Main content scrolls independently */
   overflow-y: auto !important;
   overflow-x: hidden !important;
@@ -1358,10 +1395,35 @@ main[class*="flex-1"] {
   height: 100dvh !important;
 }
 
+/* Guest workspace: in-flow sidebar, scroll inside main only */
+html[data-guest-page],
+body[data-guest-page] {
+  overflow: hidden !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+}
+
+html[data-guest-page] main[data-guest-main] {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-guest-page] .page-transition {
+  overflow: visible !important;
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
 /* Prevent body/html from scrolling - only main content scrolls */
-/* Exception: feedback, DreamPulse, HypeOS, billing (see data-* rules below) */
-html:not([data-feedback-page]):not([data-dreampulse-page]):not([data-hypeos-page]):not([data-billing-page]),
-body:not([data-feedback-page]):not([data-dreampulse-page]):not([data-hypeos-page]):not([data-billing-page]) {
+/* Exception: feedback, DreamPulse, HypeOS, billing, guest (see data-* rules below) */
+html:not([data-feedback-page]):not([data-dreampulse-page]):not([data-hypeos-page]):not([data-billing-page]):not([data-guest-page]),
+body:not([data-feedback-page]):not([data-dreampulse-page]):not([data-hypeos-page]):not([data-billing-page]):not([data-guest-page]) {
   overflow: hidden !important;
   height: 100vh !important;
   height: 100dvh !important;

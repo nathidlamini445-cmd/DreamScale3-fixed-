@@ -13,6 +13,7 @@ import { CancelProSection } from '@/components/billing/cancel-pro-section'
 import { ProPlanBadge } from '@/components/pro-plan-badge'
 
 import { useSubscriptionStatus } from '@/hooks/use-subscription-status'
+import { formatSubscriptionEndDate } from '@/lib/subscription'
 
 import type { PayfastSubscribeFormConfig } from '@/lib/payfast/subscribe-form'
 
@@ -36,9 +37,12 @@ type Props = {
 
 export function BillingPageClient({ isPro, config, userId, userEmail }: Props) {
 
-  const { isPro: isProLive, subscription_status } = useSubscriptionStatus()
+  const { isPro: isProLive, subscription_status, subscription_ends_at } =
+    useSubscriptionStatus()
 
-  const showProManage = isProLive && subscription_status === 'active'
+  const showProManage = isProLive
+  const periodEndLabel = formatSubscriptionEndDate(subscription_ends_at)
+  const isPendingCancel = subscription_status === 'cancel_at_period_end'
 
 
 
@@ -75,9 +79,9 @@ export function BillingPageClient({ isPro, config, userId, userEmail }: Props) {
               </div>
 
               <p className="text-gray-600 dark:text-gray-400 text-sm max-w-xl mx-auto">
-
-                You&apos;re subscribed. Compare plans below or cancel anytime.
-
+                {isPendingCancel && periodEndLabel
+                  ? `Pro stays active until ${periodEndLabel}. After that, you move to Free.`
+                  : "You're subscribed. Compare plans below or cancel anytime."}
               </p>
 
             </>

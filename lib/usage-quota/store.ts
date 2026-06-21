@@ -31,6 +31,7 @@ export function emptyUsage(): FreeUsageRecord {
     leadership: 0,
     teams: 0,
     competitor: 0,
+    venture_quest: 0,
   }
 }
 
@@ -55,6 +56,7 @@ export function normalizeUsage(raw: unknown): FreeUsageRecord {
     leadership: typeof o.leadership === 'number' ? o.leadership : 0,
     teams: typeof o.teams === 'number' ? o.teams : 0,
     competitor: typeof o.competitor === 'number' ? o.competitor : 0,
+    venture_quest: typeof o.venture_quest === 'number' ? o.venture_quest : 0,
   }
   if (out.period !== currentPeriod()) {
     out.period = currentPeriod()
@@ -64,6 +66,7 @@ export function normalizeUsage(raw: unknown): FreeUsageRecord {
     out.leadership = 0
     out.teams = 0
     out.competitor = 0
+    out.venture_quest = 0
   }
   return out
 }
@@ -124,7 +127,7 @@ export async function loadUserQuotaContext(userId: string): Promise<QuotaLoadRes
   }
 
   const fullSelect =
-    'subscription_tier, subscription_status, free_usage'
+    'subscription_tier, subscription_status, subscription_ends_at, subscription_activated_at, free_usage'
   let { data, error } = await supabase
     .from('user_profiles')
     .select(fullSelect)
@@ -134,7 +137,7 @@ export async function loadUserQuotaContext(userId: string): Promise<QuotaLoadRes
   if (error && isMissingFreeUsageColumn(error.message)) {
     const fallback = await supabase
       .from('user_profiles')
-      .select('subscription_tier, subscription_status')
+      .select('subscription_tier, subscription_status, subscription_ends_at, subscription_activated_at')
       .eq('id', userId)
       .maybeSingle()
     data = fallback.data as typeof data

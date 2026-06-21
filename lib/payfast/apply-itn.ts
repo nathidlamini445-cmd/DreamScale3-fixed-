@@ -1,5 +1,9 @@
 import 'server-only'
 
+import {
+  addBillingPeriodEnd,
+  resolveSubscriptionPeriodEnd,
+} from '@/lib/subscription'
 import { createAdminClient, hasAdminClient } from '@/lib/supabase/admin'
 
 /** Clerk user ids (production) or legacy Supabase auth UUIDs. */
@@ -45,6 +49,9 @@ async function activatePro(
   userId: string,
   data: PayfastItnPayload
 ): Promise<{ ok: boolean; reason?: string }> {
+  const activatedAt = new Date().toISOString()
+  const periodEnd = addBillingPeriodEnd(new Date()).toISOString()
+
   const { data: row, error } = await admin
     .from('user_profiles')
     .update({
@@ -52,7 +59,9 @@ async function activatePro(
       subscription_status: 'active',
       payfast_token: data.token || null,
       payfast_last_pf_payment_id: data.pf_payment_id || null,
-      subscription_activated_at: new Date().toISOString(),
+      subscription_activated_at: activatedAt,
+      subscription_ends_at: periodEnd,
+      subscription_cancelled_at: null,
     })
     .eq('id', userId)
     .select('id')
@@ -75,12 +84,39 @@ async function deactivatePro(
   userId: string,
   data: PayfastItnPayload
 ): Promise<{ ok: boolean; reason?: string }> {
+  const { data: existing } = await admin
+    .from('user_profiles')
+    .select('subscription_status, subscription_ends_at, subscription_activated_at')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const periodEnd = resolveSubscriptionPeriodEnd(existing)
+  if (periodEnd && periodEnd.getTime() > Date.now()) {
+    const { error } = await admin
+      .from('user_profiles')
+      .update({
+        subscription_tier: 'pro',
+        subscription_status: 'cancel_at_period_end',
+        payfast_token: null,
+        payfast_last_pf_payment_id: data.pf_payment_id || null,
+      })
+      .eq('id', userId)
+
+    if (error) {
+      console.error('[PayFast ITN] cancel-at-period-end failed:', error.message)
+      return { ok: false, reason: 'db_update_failed' }
+    }
+
+    return { ok: true }
+  }
+
   const { error } = await admin
     .from('user_profiles')
     .update({
       subscription_tier: 'free',
       subscription_status: 'cancelled',
       payfast_last_pf_payment_id: data.pf_payment_id || null,
+      payfast_token: null,
     })
     .eq('id', userId)
 

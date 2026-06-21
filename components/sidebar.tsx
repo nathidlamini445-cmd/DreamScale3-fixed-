@@ -10,7 +10,7 @@ import { ProPlanBadge } from "@/components/pro-plan-badge"
 const navigationItems = [
   { icon: Home, label: "Home", href: "/dashboard", animation: "animate-gentle-pulse", aiPowered: false },
   { icon: Zap, label: "Discover", href: "/discover", animation: "animate-smooth-bounce", aiPowered: false },
-  { icon: Cpu, label: "Venture Quest", href: "/hypeos", animation: "animate-glow-pulse", aiPowered: true },
+  { icon: Cpu, label: "Venture Quest", href: "/venture-quest", animation: "animate-glow-pulse", aiPowered: true },
   { icon: Atom, label: "Bizora AI", href: "/bizora", animation: "animate-slow-spin", aiPowered: true },
   { icon: GraduationCap, label: "SkillDrops", href: "/skilldrops", animation: "animate-smooth-bounce", aiPowered: false },
   { icon: Target, label: "FlowMatch", href: "/flowmatch", animation: "animate-gentle-pulse", aiPowered: true },
@@ -112,7 +112,7 @@ export function Sidebar() {
               <span className={cn(
                 "font-medium transition-all duration-300",
                 (pathname === "/dreampulse" || pathname.startsWith("/dreampulse")) ? "" : "group-hover:text-shimmer"
-              )}>{"Competitor Intelligence Dashboard"}</span>
+              )}>{"Competitive Intelligence"}</span>
               
               {isPro && (
                 <div className="ml-auto shrink-0">

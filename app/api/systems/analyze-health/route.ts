@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const modelName = process.env.GEMINI_MODEL || 'gemini-pro'
+    const modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash'
     const maxTokens = parseInt(process.env.GEMINI_MAX_TOKENS || '8192')
     const temperature = parseFloat(process.env.GEMINI_TEMPERATURE || '0.7')
 

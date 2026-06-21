@@ -7,11 +7,24 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, CheckCircle2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { RevenueGoal } from '@/lib/revenue-types'
 import { cn } from '@/lib/utils'
-import { AIResponse } from '@/components/ai-response'
 import { useUser } from '@clerk/nextjs'
-import * as supabaseData from '@/lib/supabase-data'
+import {
+  goalProgressPercent,
+  setGoalProgress,
+  toggleMilestone,
+} from '@/lib/revenue/goal-utils'
+import { updateRevenueGoalPersisted } from '@/lib/revenue/persist-revenue'
+import { RevenueShareBar } from '@/components/revenue/RevenueShareBar'
+import {
+  formatGoalForShare,
+  formatGoalForSheet,
+} from '@/lib/revenue/format-revenue-export'
+import { toast } from 'sonner'
+import { AddToGoogleCalendarButton } from '@/components/integrations/AddToGoogleCalendarButton'
 
 export default function GoalDetailPage() {
   const router = useRouter()
@@ -64,8 +77,21 @@ export default function GoalDetailPage() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount)
   }
 
-  const progressPercentage = (goal: RevenueGoal) => {
-    return Math.min((goal.currentProgress / goal.target) * 100, 100)
+  const persistGoal = async (updated: RevenueGoal) => {
+    setGoal(updated)
+    await updateRevenueGoalPersisted(user?.id, updated)
+  }
+
+  const handleToggleMilestone = async (index: number) => {
+    if (!goal) return
+    const next = toggleMilestone(goal, index)
+    await persistGoal(next)
+    toast.success(next.milestones[index]?.achieved ? 'Milestone achieved!' : 'Milestone unchecked')
+  }
+
+  const handleProgressChange = async (value: number) => {
+    if (!goal) return
+    await persistGoal(setGoalProgress(goal, value))
   }
 
   if (isLoading) {
@@ -118,25 +144,33 @@ export default function GoalDetailPage() {
               <ArrowLeft className="w-4 h-4" />
               Back
             </Button>
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
                   {goal.name}
                 </h1>
                 <p className="text-sm text-gray-400 dark:text-gray-500">
-                  {goal.timeframe.charAt(0).toUpperCase() + goal.timeframe.slice(1)} goal • 
+                  {goal.timeframe.charAt(0).toUpperCase() + goal.timeframe.slice(1)} goal •
                   {new Date(goal.startDate).toLocaleDateString()} - {new Date(goal.endDate).toLocaleDateString()}
                 </p>
               </div>
-              <Badge variant="outline" className={cn(
-                "text-sm font-medium border-gray-200/60 dark:border-gray-800/60",
-                progressPercentage(goal) >= 100 && "bg-transparent text-green-600 dark:text-green-400",
-                progressPercentage(goal) >= 75 && progressPercentage(goal) < 100 && "bg-transparent text-blue-600 dark:text-blue-400",
-                progressPercentage(goal) >= 50 && progressPercentage(goal) < 75 && "bg-transparent text-yellow-600 dark:text-yellow-400",
-                progressPercentage(goal) < 50 && "bg-transparent text-red-600 dark:text-red-400"
-              )}>
-                {progressPercentage(goal).toFixed(1)}% Complete
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className={cn(
+                  "text-sm font-medium border-gray-200/60 dark:border-gray-800/60",
+                  goalProgressPercent(goal) >= 100 && "bg-transparent text-green-600 dark:text-green-400",
+                  goalProgressPercent(goal) >= 75 && goalProgressPercent(goal) < 100 && "bg-transparent text-blue-600 dark:text-blue-400",
+                  goalProgressPercent(goal) >= 50 && goalProgressPercent(goal) < 75 && "bg-transparent text-yellow-600 dark:text-yellow-400",
+                  goalProgressPercent(goal) < 50 && "bg-transparent text-red-600 dark:text-red-400"
+                )}>
+                  {goalProgressPercent(goal).toFixed(1)}% Complete
+                </Badge>
+                <RevenueShareBar
+                  title={goal.name}
+                  contentType="Revenue · Goal"
+                  textContent={formatGoalForShare(goal)}
+                  sheetExport={formatGoalForSheet(goal)}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -154,7 +188,21 @@ export default function GoalDetailPage() {
                     {formatCurrency(goal.currentProgress)} / {formatCurrency(goal.target)}
                   </span>
                 </div>
-                <Progress value={progressPercentage(goal)} className="h-2" />
+                <Progress value={goalProgressPercent(goal)} className="h-2" />
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="manual-progress" className="text-sm text-gray-600 dark:text-gray-400">
+                    Update current revenue progress
+                  </Label>
+                  <Input
+                    id="manual-progress"
+                    type="number"
+                    min={0}
+                    max={goal.target}
+                    value={goal.currentProgress || ''}
+                    onChange={(e) => void handleProgressChange(parseFloat(e.target.value) || 0)}
+                    className="max-w-xs"
+                  />
+                </div>
               </div>
             </div>
 
@@ -164,10 +212,15 @@ export default function GoalDetailPage() {
                 <h2 className="text-xl font-medium text-gray-900 dark:text-white mb-8">Milestones</h2>
                 <div className="grid md:grid-cols-3 gap-6">
                   {goal.milestones.map((milestone, i) => (
-                    <div key={i} className={cn(
-                      "bg-white dark:bg-slate-950 border border-gray-200/60 dark:border-gray-800/60 rounded-lg p-6 shadow-[0_1px_3px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_3px_0_rgba(0,0,0,0.2)]",
-                      milestone.achieved && "border-l-4 border-l-green-500"
-                    )}>
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => void handleToggleMilestone(i)}
+                      className={cn(
+                        "text-left bg-white dark:bg-slate-950 border border-gray-200/60 dark:border-gray-800/60 rounded-lg p-6 shadow-[0_1px_3px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_3px_0_rgba(0,0,0,0.2)] transition-colors hover:border-blue-300 dark:hover:border-blue-700",
+                        milestone.achieved && "border-l-4 border-l-green-500"
+                      )}
+                    >
                       <div className="flex items-center gap-3 mb-3">
                         {milestone.achieved ? (
                           <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
@@ -186,7 +239,7 @@ export default function GoalDetailPage() {
                           Achieved: {new Date(milestone.achievedDate).toLocaleDateString()}
                         </p>
                       )}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -197,13 +250,27 @@ export default function GoalDetailPage() {
               <div>
                 <h2 className="text-xl font-medium text-gray-900 dark:text-white mb-8">Weekly Action Plan</h2>
                 <div className="space-y-6">
-                  {goal.weeklyActions.map((week, i) => (
+                  {goal.weeklyActions.map((week, i) => {
+                    const weekStart = new Date()
+                    weekStart.setDate(weekStart.getDate() + i * 7)
+                    weekStart.setHours(9, 0, 0, 0)
+                    const weekEnd = new Date(weekStart.getTime() + 60 * 60 * 1000)
+                    return (
                     <div key={i} className="bg-white dark:bg-slate-950 border border-gray-200/60 dark:border-gray-800/60 rounded-lg p-6 shadow-[0_1px_3px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_3px_0_rgba(0,0,0,0.2)]">
-                      <div className="flex items-center justify-between mb-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
                         <h3 className="text-base font-medium text-gray-900 dark:text-white">{week.week}</h3>
-                        <Badge variant="outline" className="text-xs font-medium border-gray-200/60 dark:border-gray-800/60">
-                          Target: {formatCurrency(week.target)}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs font-medium border-gray-200/60 dark:border-gray-800/60">
+                            Target: {formatCurrency(week.target)}
+                          </Badge>
+                          <AddToGoogleCalendarButton
+                            title={`${goal.name} — ${week.week}`}
+                            description={week.actions.join('\n')}
+                            start={weekStart.toISOString()}
+                            end={weekEnd.toISOString()}
+                            label="Add to Calendar"
+                          />
+                        </div>
                       </div>
                       <ul className="space-y-2 text-sm font-medium text-gray-600 dark:text-gray-400">
                         {week.actions.map((action, idx) => (
@@ -214,7 +281,8 @@ export default function GoalDetailPage() {
                         ))}
                       </ul>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}

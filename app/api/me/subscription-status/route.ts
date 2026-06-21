@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedUser } from '@/lib/auth-guard'
+import { expireSubscriptionIfNeeded } from '@/lib/billing/expire-subscription'
 import { isDreamScalePro } from '@/lib/subscription'
 import { hintForSupabaseServiceError } from '@/lib/supabase-service-error-hint'
 
@@ -23,7 +24,9 @@ export async function GET() {
   const supabase = createClient(url.trim(), serviceKey.trim())
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('subscription_tier, subscription_status')
+    .select(
+      'subscription_tier, subscription_status, subscription_ends_at, subscription_activated_at'
+    )
     .eq('id', user.id)
     .maybeSingle()
 
@@ -35,9 +38,12 @@ export async function GET() {
     )
   }
 
+  const profile = await expireSubscriptionIfNeeded(supabase, user.id, data)
+
   return NextResponse.json({
-    isPro: isDreamScalePro(data),
-    subscription_tier: data?.subscription_tier ?? 'free',
-    subscription_status: data?.subscription_status ?? 'inactive',
+    isPro: isDreamScalePro(profile),
+    subscription_tier: profile?.subscription_tier ?? 'free',
+    subscription_status: profile?.subscription_status ?? 'inactive',
+    subscription_ends_at: profile?.subscription_ends_at ?? null,
   })
 }

@@ -6,23 +6,26 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Briefcase, Plus, CheckCircle2, Clock, AlertCircle, Share } from "lucide-react"
+import { Loader2, Briefcase, Plus, CheckCircle2, ListTodo } from "lucide-react"
 import { SmartTaskAssignment, TeamMember, Task } from '@/lib/teams-types'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { AnalysisItemCard } from './AnalysisItemCard'
 import { Card, CardContent } from "@/components/ui/card"
-import { ShareModal } from '@/components/share-modal'
+import { formatTaskAssignmentForShare } from '@/lib/export/share-content'
+import { pushAssignmentToTasks } from '@/lib/teams/push-assignment-to-tasks'
+import { useSessionSafe } from '@/lib/session-context'
+import { toast } from 'sonner'
 
 interface SmartTaskAssignmentProps {
   assignments: SmartTaskAssignment[]
   members: TeamMember[]
   onAddAssignment: (assignment: SmartTaskAssignment) => void
-  onUpdateMembers: (members: TeamMember[]) => void
   onDeleteAssignment?: (id: string) => void
 }
 
-export default function SmartTaskAssignment({ assignments, members, onAddAssignment, onUpdateMembers, onDeleteAssignment }: SmartTaskAssignmentProps) {
+export default function SmartTaskAssignment({ assignments, members, onAddAssignment, onDeleteAssignment }: SmartTaskAssignmentProps) {
+  const sessionContext = useSessionSafe()
   const [isAssigning, setIsAssigning] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [tasks, setTasks] = useState<Omit<Task, 'id' | 'date' | 'aiAssignment'>[]>([])
@@ -59,7 +62,7 @@ export default function SmartTaskAssignment({ assignments, members, onAddAssignm
     }
 
     if (members.length === 0) {
-      alert('Please add team members first in the DNA Analysis tab')
+      toast.error('Add team members in the roster first')
       return
     }
 
@@ -74,6 +77,13 @@ export default function SmartTaskAssignment({ assignments, members, onAddAssignm
           members 
         })
       })
+
+      if (response.status === 429) {
+        toast.error('Monthly AI limit reached', {
+          description: 'Upgrade to Pro for unlimited TeamSync AI runs.',
+        })
+        return
+      }
 
       if (!response.ok) {
         throw new Error('Failed to assign tasks')
@@ -103,6 +113,23 @@ export default function SmartTaskAssignment({ assignments, members, onAddAssignm
     } finally {
       setIsAssigning(false)
     }
+  }
+
+  const handlePushToTasks = (assignment: SmartTaskAssignment) => {
+    const { tasks, addedCount } = pushAssignmentToTasks(assignment)
+    if (sessionContext?.updateTasksData) {
+      sessionContext.updateTasksData(tasks)
+    }
+    if (addedCount === 0) {
+      toast.message('These tasks are already in your task list')
+      return
+    }
+    toast.success(`Added ${addedCount} task${addedCount === 1 ? '' : 's'} to your weekly list`, {
+      action: {
+        label: 'Open Tasks',
+        onClick: () => window.location.assign('/tasks'),
+      },
+    })
   }
 
   const getPriorityColor = (priority: Task['priority']) => {
@@ -307,8 +334,8 @@ export default function SmartTaskAssignment({ assignments, members, onAddAssignm
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {assignments.map((assignment) => (
+              <div key={assignment.id} className="space-y-2">
               <AnalysisItemCard
-                key={assignment.id}
                 id={assignment.id}
                 title={assignment.projectName}
                 subtitle={`${assignment.tasks.length} task${assignment.tasks.length !== 1 ? 's' : ''}`}
@@ -324,6 +351,9 @@ export default function SmartTaskAssignment({ assignments, members, onAddAssignm
                 }}
                 type="task"
                 detailRoute={`/teams/task/${assignment.id}`}
+                shareContent={formatTaskAssignmentForShare(assignment)}
+                shareContentType="Teams · Task Assignment"
+                taskAssignment={assignment}
               >
                 <div className="space-y-5">
                   {assignment.assignmentStrategy && (
@@ -375,6 +405,16 @@ export default function SmartTaskAssignment({ assignments, members, onAddAssignm
                   </div>
                 </div>
               </AnalysisItemCard>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => handlePushToTasks(assignment)}
+              >
+                <ListTodo className="w-4 h-4 mr-2" />
+                Add assignments to Tasks
+              </Button>
+              </div>
             ))}
           </div>
         </div>

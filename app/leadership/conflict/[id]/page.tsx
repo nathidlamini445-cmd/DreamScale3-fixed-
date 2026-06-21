@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Calendar, Users, CheckCircle2, AlertTriangle, Target, Lightbulb, MessageSquare, XCircle } from "lucide-react"
 import { Conflict } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,30 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 export default function LeadershipConflictDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [conflict, setConflict] = useState<Conflict | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadConflict = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const leadershipData = JSON.parse(saved)
-          const conflicts = leadershipData.conflicts || []
-          const foundConflict = conflicts.find((c: Conflict) => c.id === params.id)
-          if (foundConflict) {
-            setConflict(foundConflict)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load conflict:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadConflict()
-  }, [params.id])
+  const { item: conflict, loading } = useLeadershipDetail<Conflict>('conflicts', params.id)
 
   if (loading) {
     return (

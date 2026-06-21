@@ -401,7 +401,7 @@ export default function GoalWizard() {
                 className="bg-[#39d2c0] hover:bg-[#39d2c0]/90"
                 onClick={() => {
                   // Navigate to dashboard
-                  window.location.href = '/hypeos';
+                  window.location.href = '/venture-quest';
                 }}
               >
                 Start My Journey

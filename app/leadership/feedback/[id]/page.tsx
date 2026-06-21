@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Calendar, Users, Target, CheckCircle2, TrendingUp, Lightbulb } from "lucide-react"
 import { Feedback360 } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,30 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 export default function LeadershipFeedbackDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [feedback, setFeedback] = useState<Feedback360 | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadFeedback = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const leadershipData = JSON.parse(saved)
-          const feedbacks = leadershipData.feedback360 || []
-          const foundFeedback = feedbacks.find((f: Feedback360) => f.id === params.id)
-          if (foundFeedback) {
-            setFeedback(foundFeedback)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load feedback:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadFeedback()
-  }, [params.id])
+  const { item: feedback, loading } = useLeadershipDetail<Feedback360>('feedback360', params.id)
 
   if (loading) {
     return (

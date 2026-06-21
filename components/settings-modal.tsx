@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { X, User, Settings as SettingsIcon, Bell, Users, Building, CreditCard, UserCircle, Sliders, MessageSquare, Trash2, Plug } from "lucide-react"
 import { PlanBillingSection } from "@/components/settings/plan-billing-section"
 import { IntegrationsSection } from "@/components/settings/integrations-section"
+import { WorkspaceSettingsSection } from "@/components/settings/workspace-settings-section"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useLanguage } from "@/lib/language-context"
@@ -57,6 +58,7 @@ export function SettingsModal({
   const { signOut } = useClerk()
   const router = useRouter()
   const [activeSection, setActiveSection] = useState("account")
+  const [workspaceContextId, setWorkspaceContextId] = useState<string | null>(null)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   
   // Secret sequence to unlock feedback view: General -> People -> Teamspaces -> Teamspaces -> People -> General -> Upgrade -> General
@@ -137,12 +139,22 @@ export function SettingsModal({
     }
   ]
 
-  const readOnlySections = new Set(["upgrade", "integrations", "feedback"])
+  const readOnlySections = new Set([
+    'upgrade',
+    'integrations',
+    'feedback',
+    'general',
+    'people',
+    'teamspaces',
+  ])
 
   // Handle secret sequence for accessing feedback view
   const handleSectionClick = (sectionId: string) => {
     // Always update active section for normal behavior
     setActiveSection(sectionId)
+    if (sectionId !== 'people') {
+      setWorkspaceContextId(null)
+    }
     
     // Clear existing timeout
     if (timeoutRef.current) {
@@ -609,19 +621,92 @@ export function SettingsModal({
             </div>
           </div>
         )
+      case "notifications":
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                {t("settings.notifications")}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Choose how DreamScale keeps you updated.
+              </p>
+            </div>
+            <div className="space-y-4">
+              {[
+                {
+                  key: 'email' as const,
+                  title: 'Email notifications',
+                  description: 'Product updates, billing, and important account messages.',
+                },
+                {
+                  key: 'push' as const,
+                  title: 'In-app reminders',
+                  description: 'Tasks, roadmap nudges, and session reminders inside DreamScale.',
+                },
+                {
+                  key: 'marketing' as const,
+                  title: 'Tips & product news',
+                  description: 'Occasional emails about new features and founder resources.',
+                },
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700 last:border-0"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.title}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.description}</p>
+                  </div>
+                  <Switch
+                    checked={settingsData.notifications[item.key]}
+                    onCheckedChange={(checked) =>
+                      setSettingsData({
+                        ...settingsData,
+                        notifications: { ...settingsData.notifications, [item.key]: checked },
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      case "general":
+        return <WorkspaceSettingsSection section="general" onClose={onClose} />
+      case "people":
+        return (
+          <WorkspaceSettingsSection
+            section="people"
+            onClose={onClose}
+            selectedWorkspaceId={workspaceContextId}
+            onBackToTeamspaces={
+              workspaceContextId
+                ? () => {
+                    setWorkspaceContextId(null)
+                    setActiveSection('teamspaces')
+                  }
+                : undefined
+            }
+          />
+        )
+      case "teamspaces":
+        return (
+          <WorkspaceSettingsSection
+            section="teamspaces"
+            onClose={onClose}
+            onNavigateToPeople={(workspaceId) => {
+              setWorkspaceContextId(workspaceId)
+              setActiveSection('people')
+            }}
+          />
+        )
       case "upgrade":
         return <PlanBillingSection />
       case "integrations":
         return <IntegrationsSection />
       default:
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-1">{activeSection}</h2>
-              <p className="text-sm text-gray-500">This section is coming soon.</p>
-            </div>
-          </div>
-        )
+        return null
     }
   }
 

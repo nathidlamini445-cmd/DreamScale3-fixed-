@@ -138,7 +138,7 @@ export default function SOPViewPage() {
       // Small delay to ensure localStorage is written before navigation
       setTimeout(() => {
         // Navigate back to documentation tab
-        router.push('/revenue?tab=documentation')
+        router.push('/systems?tab=documentation')
       }, 150)
     } catch (error) {
       console.error('Failed to save SOP:', error)
@@ -148,7 +148,7 @@ export default function SOPViewPage() {
 
   const handleBack = () => {
     // Navigate back to systems documentation tab
-    router.push('/revenue?tab=documentation')
+    router.push('/systems?tab=documentation')
   }
 
   if (isLoading) {

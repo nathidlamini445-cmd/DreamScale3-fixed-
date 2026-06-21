@@ -33,8 +33,16 @@ import {
   RefreshCw,
   Coffee,
   Loader2,
-  Share
+  Share,
+  FileText,
+  Table2,
+  ExternalLink,
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { RoadmapJourney } from '@/components/roadmap/RoadmapJourney'
+import { StrategicFocusJourney } from '@/components/roadmap/StrategicFocusJourney'
+import { formatFullRoadmapForExport } from '@/lib/roadmap/format-full-roadmap'
+import { exportToGoogleSheets } from '@/lib/integrations/export-google-sheets'
 import { loadOnboardingData, getUserChallenges, getUserIndustry, getUserBusinessStage } from '@/lib/onboarding-storage'
 import { OnboardingData } from '@/components/onboarding/onboarding-types'
 import { useBizoraLoading } from "@/lib/bizora-loading-context"
@@ -44,6 +52,8 @@ import { useUser } from '@clerk/nextjs'
 import { saveSuggestionsData, loadSuggestionsData } from '@/lib/supabase-data'
 import { useSubscriptionStatus } from '@/hooks/use-subscription-status'
 import { ProPlanBadge } from '@/components/pro-plan-badge'
+import { AddToGoogleCalendarButton } from '@/components/integrations/AddToGoogleCalendarButton'
+import { SendToSlackButton } from '@/components/integrations/SendToSlackButton'
 
 interface Suggestion {
   id: string
@@ -70,6 +80,23 @@ interface DeepFocusArea {
   systemsToCreate: string[]
   icon: string
   color: string
+}
+
+function getMilestoneCalendarWindow(
+  priority: Suggestion['priority'],
+  index: number,
+  daily = false
+): { start: string; end: string } {
+  const start = new Date()
+  if (daily) {
+    start.setHours(14, 0, 0, 0)
+  } else {
+    const daysByPriority = { high: 7, medium: 14, low: 21 } as const
+    start.setDate(start.getDate() + daysByPriority[priority] + index * 3)
+    start.setHours(9, 0, 0, 0)
+  }
+  const end = new Date(start.getTime() + 60 * 60 * 1000)
+  return { start: start.toISOString(), end: end.toISOString() }
 }
 
 const iconMap: { [key: string]: typeof Sparkles } = {
@@ -801,15 +828,15 @@ function generateMainRecommendations(onboardingData: OnboardingData | null): Sug
       explanation: `You can't win a game you don't understand, and business is no different. Many entrepreneurs make the mistake of either ignoring their competitors entirely (thinking they're so unique that competition doesn't matter) or obsessing over competitors and trying to copy everything they do. Both approaches are wrong. Competitive intelligence isn't about copying competitors - it's about understanding the market landscape deeply enough to find your unique position and identify opportunities others are missing. For ${businessName}${industry ? ` in ${industry}` : ''}, this means knowing who else solves similar problems for your target customers, what they do well, where they fall short, what gaps exist in the market, and how you can position yourself to win. Without this understanding, you risk either competing on the same terms as everyone else (a race to the bottom) or positioning yourself in a way that doesn't resonate with customers because you don't understand what they're already getting elsewhere. Competitive intelligence helps you find the angles where you can genuinely win - not by being better at everything, but by being different in ways that matter to your target customers.` + `\n\n` + `To use Competitor Intelligence effectively for ${businessName}, start by creating a comprehensive list of competitors - both direct competitors (businesses offering similar solutions to the same market) and indirect competitors (businesses solving the same customer problem in different ways). The Competitor Intelligence tool in DreamScale helps you analyze each competitor systematically, looking at their strengths, weaknesses, customer reviews, pricing strategies, marketing approaches, and market positioning. The tool uses AI to help you identify patterns - what do customers consistently complain about across competitors? What gaps exist that no one is filling? What positioning is everyone using that you could differentiate from? This analysis helps you develop a unique positioning for ${businessName} that's based on actual market gaps and customer needs, not just your assumptions. The key is to use this intelligence to inform your strategy - not to copy what competitors do, but to understand the landscape well enough to find where you can win. Regular quarterly reviews of your competitive analysis keep you updated on market changes, new entrants, and evolving customer needs, ensuring ${businessName} stays ahead of market shifts and maintains its unique position.`,
       whyItMatters: `For ${businessName}, competitive analysis helps you identify opportunities others are missing and develop positioning that makes you stand out rather than blend in.`,
       howToStart: [
-        `Competitive intelligence is about understanding your market landscape so you can find your unique position and avoid competing on the same terms as everyone else. For ${businessName}${industry ? ` in ${industry}` : ''}, this means knowing who else is solving similar problems for your target customers. To get started, access the Competitor Intelligence feature by clicking "Competitor Intelligence" in the left sidebar menu (it has a magnifying glass icon and an "AI" badge). This feature uses AI to help you analyze competitors systematically. The interface will guide you through entering competitor information and will help you analyze their strategies, strengths, and weaknesses. The tool is designed to help you understand not just who your competitors are, but how they operate, what they do well, where they struggle, and what opportunities they're missing. This isn't about copying them - it's about finding where you can win.`,
+        `Competitive intelligence is about understanding your market landscape so you can find your unique position and avoid competing on the same terms as everyone else. For ${businessName}${industry ? ` in ${industry}` : ''}, this means knowing who else is solving similar problems for your target customers. To get started, access Competitive Intelligence by clicking "Competitive Intelligence" in the left sidebar menu (it has a magnifying glass icon and an "AI" badge). This feature uses AI to help you analyze competitors systematically. The interface will guide you through entering competitor information and will help you analyze their strategies, strengths, and weaknesses. The tool is designed to help you understand not just who your competitors are, but how they operate, what they do well, where they struggle, and what opportunities they're missing. This isn't about copying them - it's about finding where you can win.`,
         `Start by creating a comprehensive list of competitors, but think broadly about who else solves the same problem your customers have. Direct competitors are businesses that offer the same or very similar products/services to the same target market - these are the obvious ones. But also list indirect competitors - businesses that solve the same customer problem in a different way. For example, if ${businessName} sells productivity software, your direct competitors are other productivity software companies, but your indirect competitors might include productivity coaches, time management consultants, or even project management tools that overlap with your features. Think about substitutes too - what else could your customers use instead of your solution? For each competitor, note their name, website, main offering, and target market. Don't limit yourself to just local competitors - in today's digital world, your competition might be global. Use search engines, industry directories, social media, and customer feedback to identify competitors you might not have known about. The goal is to have a complete picture of your competitive landscape.`,
         `For each competitor you've identified, conduct a thorough analysis of their strengths and weaknesses. Start with their strengths - what do they do exceptionally well? This might be their marketing, their product features, their customer service, their pricing strategy, their brand positioning, or their distribution channels. Look at their website, their social media presence, their customer reviews, their content marketing, and any press coverage they've received. What makes customers choose them? What are they known for? Then, identify their weaknesses - where do they fall short? This might be areas where they receive consistent complaints, features they're missing, poor customer service, confusing messaging, or gaps in their offering. Look for patterns in negative reviews - what do customers consistently complain about? Check their social media for customer service issues or public complaints. Also analyze what they're NOT doing - what marketing channels aren't they using? What customer segments aren't they targeting? What problems aren't they solving? This analysis will reveal opportunities for ${businessName} to differentiate and win.`,
         `Customer reviews are a goldmine of competitive intelligence because they tell you exactly what real customers think about your competitors. Read reviews on multiple platforms - Google Reviews, Yelp, Trustpilot, industry-specific review sites, app stores (if applicable), and social media. Look for patterns in what customers love - these are the competitor's true strengths that you need to match or exceed. For example, if multiple reviews praise a competitor's "fast response time," that's a strength you should be aware of. More importantly, pay close attention to what customers complain about - these are weaknesses and opportunities. Common complaints might include: slow service, poor communication, confusing processes, missing features, high prices, or lack of personalization. These complaints represent unmet needs that ${businessName} could address. For each major complaint pattern you find, ask yourself: "Can we solve this problem better? Is this something our target customers care about? How would we address this differently?" Customer reviews also reveal what language customers use to describe problems and solutions - this helps you craft messaging that resonates. Take notes on the most common positive and negative themes for each competitor.`,
         `Once you understand what competitors are doing well and where they struggle, identify the gaps they're not filling. These gaps are opportunities for ${businessName} to create unique value. Gaps might be: customer segments that aren't being served well (maybe competitors focus on large enterprises but ignore small businesses, or vice versa), problems that aren't being solved (maybe competitors offer the core solution but don't help with implementation or support), price points that aren't being addressed (maybe everything in the market is either very expensive or very cheap, with nothing in the middle), service levels that aren't being met (maybe competitors are all self-service but customers want more hand-holding), or features/benefits that are missing (maybe all competitors focus on one aspect but ignore another important aspect). Also look for gaps in how competitors communicate or market themselves - maybe they all use the same messaging, the same channels, or the same positioning. These gaps represent opportunities to stand out. For each gap you identify, evaluate: Is this something our target customers actually want? Can we fill this gap effectively? Does filling this gap align with ${businessName}'s strengths and resources?`,
         `Based on your competitive analysis, define ${businessName}'s unique positioning - how are you different, and why should customers choose you? Your positioning should be clear, specific, and defensible. It's not enough to say "we're better" - you need to articulate exactly how and why. Your unique positioning might be based on: serving a specific customer segment better than anyone else (e.g., "We're the only productivity tool designed specifically for solopreneurs"), solving a problem others ignore (e.g., "While competitors focus on features, we focus on simplicity and ease of use"), offering a different business model (e.g., "Instead of subscriptions, we offer pay-as-you-go pricing"), providing superior service in a specific area (e.g., "We're known for our 24/7 customer support and implementation help"), or combining things in a unique way (e.g., "We're the only platform that combines project management with time tracking and invoicing"). Your positioning should be something you can actually deliver on and that matters to your target customers. Write it down clearly: "For [target customer], ${businessName} is the [category] that [unique benefit] because [reason to believe]." This positioning statement will guide your marketing, product development, and customer communication.`,
-        `Competitive analysis isn't a one-time exercise - markets change, competitors evolve, and new players enter. Create a competitive analysis document (you can use the Competitor Intelligence tool's built-in features or create your own document) that includes: your list of competitors (direct, indirect, and substitutes), each competitor's strengths and weaknesses, key insights from customer reviews, identified market gaps, and ${businessName}'s unique positioning. Set a reminder to review and update this analysis quarterly (every 3 months). During each review, check if new competitors have emerged, if existing competitors have changed their strategies, if customer sentiment has shifted, and if new gaps or opportunities have appeared. Also track how ${businessName}'s positioning is holding up - are you still differentiated? Have competitors copied your approach? Do you need to evolve your positioning? This quarterly review keeps your competitive intelligence current and ensures ${businessName} stays ahead of market changes. Over time, you'll build a comprehensive understanding of your competitive landscape that informs strategic decisions and helps you maintain your unique position in the market.`
+        `Competitive analysis isn't a one-time exercise - markets change, competitors evolve, and new players enter. Create a competitive analysis document (you can use Competitive Intelligence's built-in features or create your own document) that includes: your list of competitors (direct, indirect, and substitutes), each competitor's strengths and weaknesses, key insights from customer reviews, identified market gaps, and ${businessName}'s unique positioning. Set a reminder to review and update this analysis quarterly (every 3 months). During each review, check if new competitors have emerged, if existing competitors have changed their strategies, if customer sentiment has shifted, and if new gaps or opportunities have appeared. Also track how ${businessName}'s positioning is holding up - are you still differentiated? Have competitors copied your approach? Do you need to evolve your positioning? This quarterly review keeps your competitive intelligence current and ensures ${businessName} stays ahead of market changes. Over time, you'll build a comprehensive understanding of your competitive landscape that informs strategic decisions and helps you maintain your unique position in the market.`
       ],
-      feature: 'Competitor Intelligence',
+      feature: 'Competitive Intelligence',
       featureLink: '/dreampulse',
       icon: 'target',
       priority: 'low' as const,
@@ -1025,11 +1052,14 @@ function SuggestionsPage() {
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0)
   const [completedIds, setCompletedIds] = useState<string[]>([])
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null)
+  const [expandedStrategicArea, setExpandedStrategicArea] = useState<string | null>(null)
   const [shareModal, setShareModal] = useState<{isOpen: boolean, content: string, title: string}>({
     isOpen: false,
     content: '',
     title: ''
   })
+  const [shouldRunInitialAi, setShouldRunInitialAi] = useState(false)
+  const [exportingRoadmap, setExportingRoadmap] = useState<'google' | 'sheets' | 'notion' | null>(null)
 
   useEffect(() => {
     const loadSuggestions = async () => {
@@ -1267,40 +1297,35 @@ function SuggestionsPage() {
       // Check if generate=true is in URL (should be removed immediately)
       const shouldGenerateFromUrl = searchParams.get('generate') === 'true'
       
-      // Only generate if we have NO saved data AND we have onboarding data
-      // NEVER regenerate if we have saved data - that's the whole point of persistence
       if (!hasSavedData && data) {
-        console.log('📝 No saved recommendations found, generating initial recommendations...')
-        
-        // Show generic recommendations immediately (no loading)
-        const genericRecommendations = generateMainRecommendations(data)
-        const genericDaily = generateDailyRecommendations(data, new Date())
-        setMainSuggestions(genericRecommendations)
-        setDailySuggestions(genericDaily)
-        
-        // Save to Supabase (for authenticated users) and localStorage (fallback)
-        if (authUser?.id) {
-          try {
-            await saveSuggestionsData(authUser.id, {
-              mainSuggestions: genericRecommendations,
-              dailySuggestions: genericDaily,
-              deepFocusAreas: generatedFocusAreas
-            })
-            console.log('✅ Saved generic recommendations to Supabase')
-          } catch (error) {
-            console.warn('Failed to save to Supabase, using localStorage:', error)
+        if (shouldGenerateFromUrl) {
+          console.log('📝 Triggering AI roadmap generation from dashboard...')
+          router.replace('/suggestions', { scroll: false })
+          setShouldRunInitialAi(true)
+          setIsLoading(true)
+        } else {
+          console.log('📝 No saved recommendations — showing profile-based starter roadmap...')
+          const genericRecommendations = generateMainRecommendations(data).slice(0, 5)
+          const genericDaily = generateDailyRecommendations(data, new Date())
+          setMainSuggestions(genericRecommendations)
+          setDailySuggestions(genericDaily)
+
+          if (authUser?.id) {
+            try {
+              await saveSuggestionsData(authUser.id, {
+                mainSuggestions: genericRecommendations,
+                dailySuggestions: genericDaily,
+                deepFocusAreas: generatedFocusAreas,
+              })
+            } catch (error) {
+              console.warn('Failed to save to Supabase, using localStorage:', error)
+            }
           }
+
+          localStorage.setItem('mainRecommendations', JSON.stringify(genericRecommendations))
+          localStorage.setItem('dailyRecommendations', JSON.stringify(genericDaily))
         }
-        
-        // Also save to localStorage (for unauthenticated users or as backup)
-        localStorage.setItem('mainRecommendations', JSON.stringify(genericRecommendations))
-        localStorage.setItem('dailyRecommendations', JSON.stringify(genericDaily))
-      }
-      
-      // CRITICAL: Remove URL parameter if present to prevent regeneration on refresh
-      // The "Generate More" button should directly call generateRecommendations(), not use URL params
-      if (shouldGenerateFromUrl) {
-        console.log('🧹 Removing generate=true from URL to prevent regeneration on refresh...')
+      } else if (shouldGenerateFromUrl) {
         router.replace('/suggestions', { scroll: false })
       }
       
@@ -1311,7 +1336,9 @@ function SuggestionsPage() {
         setDailySuggestions([])
       }
       
-      setIsLoading(false)
+      if (!shouldGenerateFromUrl || hasSavedData) {
+        setIsLoading(false)
+      }
     }
 
     // Call async function
@@ -1319,6 +1346,12 @@ function SuggestionsPage() {
       console.error('Error loading suggestions:', error)
     })
   }, [sessionContext?.sessionData?.entrepreneurProfile, authUser?.id, searchParams])
+
+  useEffect(() => {
+    if (!shouldRunInitialAi || !onboardingData) return
+    setShouldRunInitialAi(false)
+    void generateRecommendations(false)
+  }, [shouldRunInitialAi, onboardingData])
 
   const generateRecommendations = async (requestDifferent: boolean = false) => {
     // If generating more, set isGeneratingMore flag
@@ -1427,11 +1460,7 @@ function SuggestionsPage() {
         console.log('✅ AI recommendations received:', recCount, 'recommendations', requestDifferent ? '(DIFFERENT)' : '')
         
         if (result.recommendations && Array.isArray(result.recommendations) && result.recommendations.length > 0) {
-          // Ensure we have exactly 3 recommendations (API should guarantee this, but validate)
-          const recommendations = result.recommendations.slice(0, 3)
-          if (recommendations.length !== 3) {
-            console.warn(`⚠️ Expected 3 recommendations but got ${recommendations.length}`)
-          }
+          const recommendations = result.recommendations.slice(0, 5)
           
           setMainSuggestions(recommendations)
           // Generate daily recommendations
@@ -1493,7 +1522,7 @@ function SuggestionsPage() {
         errorMessage += 'Please try again or check your internet connection.'
       }
       
-      alert(errorMessage)
+      toast.error('Roadmap generation failed', { description: errorMessage })
     } finally {
       if (requestDifferent) {
         setIsGeneratingMore(false)
@@ -1588,7 +1617,106 @@ Please provide more detailed guidance, additional strategies, and actionable ins
     })
   }
 
+  const handleSelectRoadmapNode = (id: string) => {
+    setExpandedSuggestion(id)
+    requestAnimationFrame(() => {
+      document.getElementById(`roadmap-item-${id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+  }
+
+  const handleSelectStrategicFocus = (id: string) => {
+    setExpandedStrategicArea(id)
+    requestAnimationFrame(() => {
+      document.getElementById(`strategic-focus-${id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    })
+  }
+
+  const handleExportFullRoadmap = async (target: 'google' | 'sheets' | 'notion') => {
+    if (!isPro) {
+      toast.error('Full roadmap export requires DreamScale Pro')
+      return
+    }
+    setExportingRoadmap(target)
+    try {
+      if (target === 'sheets') {
+        const data = await exportToGoogleSheets(
+          {
+            roadmap: {
+              businessName: onboardingData?.businessName,
+              mainSuggestions,
+              dailySuggestions,
+              deepFocusAreas,
+              completedIds,
+            },
+          },
+          '/suggestions'
+        )
+        if (data.code === 'GOOGLE_NOT_CONNECTED') return
+        toast.success('Roadmap exported to Google Sheets')
+        if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
+        return
+      }
+
+      const { title, content } = formatFullRoadmapForExport({
+        businessName: onboardingData?.businessName,
+        mainSuggestions,
+        dailySuggestions,
+        deepFocusAreas,
+        completedIds,
+      })
+      const endpoint =
+        target === 'google'
+          ? '/api/integrations/google/export-doc'
+          : '/api/integrations/notion/export-content'
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ title, content, contentType: 'DreamScale Roadmap' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const code = data.code as string | undefined
+        if (code === 'GOOGLE_NOT_CONNECTED' || code === 'NOTION_NOT_CONNECTED') {
+          const connect =
+            target === 'google'
+              ? '/api/integrations/google/connect'
+              : '/api/integrations/notion/connect'
+          window.location.href = `${connect}?returnTo=${encodeURIComponent('/suggestions')}`
+          return
+        }
+        throw new Error(data.error || 'Export failed')
+      }
+      toast.success(`Roadmap exported to ${target === 'google' ? 'Google Docs' : 'Notion'}`)
+      if (data.url) window.open(data.url, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      toast.error('Roadmap export failed', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      })
+    } finally {
+      setExportingRoadmap(null)
+    }
+  }
+
   const allSuggestions = [...mainSuggestions, ...dailySuggestions]
+  const trackableIds = allSuggestions.map((s) => s.id)
+  const completedCount = completedIds.filter((id) => trackableIds.includes(id)).length
+  const progressPct = trackableIds.length
+    ? Math.round((completedCount / trackableIds.length) * 100)
+    : 0
+  const roadmapShare = formatFullRoadmapForExport({
+    businessName: onboardingData?.businessName,
+    mainSuggestions,
+    dailySuggestions,
+    deepFocusAreas,
+    completedIds,
+  })
   const categories = ['all', ...new Set(allSuggestions.map(s => s.category))]
   
   const filteredSuggestions = activeFilter === 'all' 
@@ -1629,27 +1757,88 @@ Please provide more detailed guidance, additional strategies, and actionable ins
               </Button>
             </Link>
             
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex-1">
                 <h1 className="text-3xl font-semibold text-foreground mb-1.5">Your Personalized Roadmap</h1>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  Deep recommendations based on your specific challenges and goals
+                  A visual path from this week to this quarter — powered by your profile & AI
                 </p>
-              </div>
-              {/* Regenerate button - always visible */}
-              <button
-                onClick={() => generateRecommendations(false)}
-                disabled={isLoading}
-                className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                title="Regenerate recommendations"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
+                {trackableIds.length > 0 && (
+                  <div className="mt-4 max-w-md">
+                    <div className="mb-1 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{completedCount} of {trackableIds.length} milestones done</span>
+                      <span>{progressPct}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-blue-500 to-violet-500 transition-all duration-500"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
-                <span className="hidden sm:inline">Regenerate</span>
-              </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExportFullRoadmap('google')}
+                  disabled={!!exportingRoadmap || !mainSuggestions.length}
+                  className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  {exportingRoadmap === 'google' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Export to Docs</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportFullRoadmap('sheets')}
+                  disabled={!!exportingRoadmap || !mainSuggestions.length}
+                  className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  {exportingRoadmap === 'sheets' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Table2 className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Export to Sheets</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportFullRoadmap('notion')}
+                  disabled={!!exportingRoadmap || !mainSuggestions.length}
+                  className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  {exportingRoadmap === 'notion' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <BookOpen className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Export to Notion</span>
+                </button>
+                <SendToSlackButton
+                  title={roadmapShare.title}
+                  message={roadmapShare.content.slice(0, 3500)}
+                  label="Send to Slack"
+                  className="h-9 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                />
+                <button
+                  type="button"
+                  onClick={() => generateRecommendations(false)}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+                  title="Regenerate recommendations"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Regenerate</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1713,71 +1902,117 @@ Please provide more detailed guidance, additional strategies, and actionable ins
             </div>
           ) : (
             <div className="space-y-12">
-              {/* Deep Focus Areas Section */}
-              <section>
-                <div className="mb-5">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <h2 className="text-xl font-medium text-gray-900 dark:text-white">Deep Focus Areas</h2>
-                    {isPro && <ProPlanBadge active />}
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Fundamental areas to work on based on your challenges
-                  </p>
-                </div>
+              {mainSuggestions.length > 0 && (
+                <section>
+                  <RoadmapJourney
+                    items={mainSuggestions.map((s) => ({
+                      id: s.id,
+                      title: s.title,
+                      description: s.description,
+                      priority: s.priority,
+                      category: s.category,
+                      completed: completedIds.includes(s.id),
+                    }))}
+                    businessName={onboardingData?.businessName}
+                    onSelectItem={handleSelectRoadmapNode}
+                  />
+                </section>
+              )}
 
-                <div className="space-y-4">
-                  {deepFocusAreas.map((area) => {
-                    const Icon = iconMap[area.icon] || Sparkles
-                    return (
-                      <div key={area.id} className="p-5 bg-white dark:bg-slate-950 border border-blue-300 dark:border-blue-700 rounded-lg">
-                        <div className="flex items-start gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                            <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <h3 className="text-lg font-medium text-gray-900 dark:text-white">{area.title}</h3>
-                              {isPro && <ProPlanBadge active />}
+              {/* Strategic Focus Section */}
+              {deepFocusAreas.length > 0 && (
+                <section>
+                  <StrategicFocusJourney
+                    items={deepFocusAreas.map((area) => ({
+                      id: area.id,
+                      title: area.title,
+                      description: area.description,
+                      questionCount: area.keyQuestions.length,
+                      systemCount: area.systemsToCreate.length,
+                      active: expandedStrategicArea === area.id,
+                    }))}
+                    businessName={onboardingData?.businessName}
+                    onSelectItem={handleSelectStrategicFocus}
+                  />
+
+                  <div className="mt-6 space-y-4">
+                    {deepFocusAreas.map((area) => {
+                      const Icon = iconMap[area.icon] || Sparkles
+                      const isActive = expandedStrategicArea === area.id
+                      return (
+                        <div
+                          key={area.id}
+                          id={`strategic-focus-${area.id}`}
+                          className={`scroll-mt-28 rounded-lg border p-5 transition-all ${
+                            isActive
+                              ? 'border-indigo-400 bg-white ring-2 ring-indigo-400/30 dark:border-indigo-600 dark:bg-slate-950'
+                              : 'border-blue-300/80 bg-white dark:border-blue-700 dark:bg-slate-950'
+                          }`}
+                        >
+                          <div className="mb-4 flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                              <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{area.description}</p>
-                            
-                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4">{area.explanation}</p>
+                            <div className="flex-1">
+                              <div className="mb-1 flex flex-wrap items-center gap-2">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                                  {area.title}
+                                </h3>
+                                {isPro && <ProPlanBadge active />}
+                              </div>
+                              <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                                {area.description}
+                              </p>
+                              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                {area.explanation}
+                              </p>
+                            </div>
+                          </div>
 
-                            <div className="grid md:grid-cols-2 gap-6 pt-4 border-t border-blue-200 dark:border-blue-800">
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                  Key Questions to Answer
-                                </h4>
-                                <ul className="space-y-1.5">
-                                  {area.keyQuestions.map((q, i) => (
-                                    <li key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                                      <span className="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0">{i + 1}.</span>
-                                      <span>{q}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                  Systems to Create
-                                </h4>
-                                <ul className="space-y-1.5">
-                                  {area.systemsToCreate.map((s, i) => (
-                                    <li key={i} className="text-xs text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                                      <span className="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0">•</span>
-                                      <span>{s}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
+                          <div className="grid gap-6 border-t border-blue-200 pt-4 dark:border-blue-800 md:grid-cols-2">
+                            <div>
+                              <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Key Questions to Answer
+                              </h4>
+                              <ul className="space-y-1.5">
+                                {area.keyQuestions.map((q, i) => (
+                                  <li
+                                    key={i}
+                                    className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400"
+                                  >
+                                    <span className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400">
+                                      {i + 1}.
+                                    </span>
+                                    <span>{q}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Systems to Create
+                              </h4>
+                              <ul className="space-y-1.5">
+                                {area.systemsToCreate.map((s, i) => (
+                                  <li
+                                    key={i}
+                                    className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400"
+                                  >
+                                    <span className="mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-400">
+                                      •
+                                    </span>
+                                    <span>{s}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
 
               {/* Main Recommendations Section */}
               <section>
@@ -1800,7 +2035,7 @@ Please provide more detailed guidance, additional strategies, and actionable ins
                 </div>
 
                 <div className="space-y-4 mb-12">
-                  {mainSuggestions.map((suggestion) => {
+                  {mainSuggestions.map((suggestion, index) => {
                     const Icon = iconMap[suggestion.icon] || Sparkles
                     const isExpanded = expandedSuggestion === suggestion.id
                     const isCompleted = completedIds.includes(suggestion.id)
@@ -1812,6 +2047,7 @@ Please provide more detailed guidance, additional strategies, and actionable ins
                         Icon={Icon}
                         isExpanded={isExpanded}
                         isCompleted={isCompleted}
+                        milestoneIndex={index}
                         onToggleExpand={toggleExpand}
                         onToggleComplete={toggleComplete}
                         onDiveDeeper={handleDiveDeeper}
@@ -1833,7 +2069,7 @@ Please provide more detailed guidance, additional strategies, and actionable ins
                 </div>
 
                 <div className="space-y-4">
-                  {dailySuggestions.map((suggestion) => {
+                  {dailySuggestions.map((suggestion, index) => {
                     const Icon = iconMap[suggestion.icon] || Sparkles
                     const isExpanded = expandedSuggestion === suggestion.id
                     const isCompleted = completedIds.includes(suggestion.id)
@@ -1845,6 +2081,8 @@ Please provide more detailed guidance, additional strategies, and actionable ins
                         Icon={Icon}
                         isExpanded={isExpanded}
                         isCompleted={isCompleted}
+                        milestoneIndex={index}
+                        isDailyMilestone
                         onToggleExpand={toggleExpand}
                         onToggleComplete={toggleComplete}
                         onDiveDeeper={handleDiveDeeper}
@@ -1906,6 +2144,8 @@ function SuggestionCard({
   Icon,
   isExpanded, 
   isCompleted,
+  milestoneIndex = 0,
+  isDailyMilestone = false,
   onToggleExpand,
   onToggleComplete,
   onDiveDeeper,
@@ -1916,19 +2156,27 @@ function SuggestionCard({
   Icon: typeof Sparkles
   isExpanded: boolean
   isCompleted: boolean
+  milestoneIndex?: number
+  isDailyMilestone?: boolean
   onToggleExpand: (id: string, e: React.MouseEvent) => void
   onToggleComplete: (id: string, e: React.MouseEvent) => Promise<void>
   onDiveDeeper: (suggestion: Suggestion, e: React.MouseEvent) => void
   onShare?: (suggestion: Suggestion, e: React.MouseEvent) => void
   isPro: boolean
 }) {
+  const calendarWindow = getMilestoneCalendarWindow(
+    suggestion.priority,
+    milestoneIndex,
+    isDailyMilestone
+  )
   return (
-    <Card 
-      className={`p-5 transition-all duration-200 cursor-pointer ${
+    <Card
+      id={`roadmap-item-${suggestion.id}`}
+      className={`scroll-mt-28 p-5 transition-all duration-200 cursor-pointer ${
         isCompleted 
           ? 'bg-green-500/5 border-green-500/20 opacity-75' 
           : 'bg-white dark:bg-gray-900 border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300/80 dark:hover:border-gray-700/80 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_0_rgba(0,0,0,0.3)]'
-      }`}
+      } ${isExpanded ? 'ring-2 ring-blue-400/40 dark:ring-blue-600/40' : ''}`}
       onClick={(e) => onToggleExpand(suggestion.id, e)}
     >
       <div className="flex items-start gap-3">
@@ -2007,7 +2255,7 @@ function SuggestionCard({
                 </ol>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Button
                   variant="outline"
                   onClick={(e) => onToggleComplete(suggestion.id, e)}
@@ -2016,6 +2264,14 @@ function SuggestionCard({
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                   {isCompleted ? 'Completed' : 'Mark as Done'}
                 </Button>
+                {suggestion.featureLink && (
+                  <Button variant="default" size="sm" asChild onClick={(e) => e.stopPropagation()}>
+                    <Link href={suggestion.featureLink}>
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Open in {suggestion.feature}
+                    </Link>
+                  </Button>
+                )}
                 {onShare && (
                   <Button
                     variant="outline"
@@ -2027,11 +2283,25 @@ function SuggestionCard({
                     Share
                   </Button>
                 )}
+                <span onClick={(e) => e.stopPropagation()}>
+                  <AddToGoogleCalendarButton
+                    title={suggestion.title}
+                    description={[
+                      suggestion.description,
+                      '',
+                      'Steps:',
+                      ...suggestion.howToStart.map((step, i) => `${i + 1}. ${step}`),
+                    ].join('\n')}
+                    start={calendarWindow.start}
+                    end={calendarWindow.end}
+                    label="Add to Calendar"
+                  />
+                </span>
                 <button
                   onClick={(e) => onDiveDeeper(suggestion, e)}
                   className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline-offset-4 hover:underline transition-colors"
                 >
-                  Dive Deeper to Bizora AI
+                  Dive Deeper in Bizora
                 </button>
               </div>
             </div>

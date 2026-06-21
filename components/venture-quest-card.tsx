@@ -305,7 +305,7 @@ export function VentureQuestCard() {
         
         {/* Navigation Button - Always show */}
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <Link href="/hypeos" className="block">
+          <Link href="/venture-quest" className="block">
             <Button 
               className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:border dark:border-gray-700 font-medium"
             >

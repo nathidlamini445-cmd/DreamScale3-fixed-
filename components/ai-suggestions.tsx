@@ -92,7 +92,7 @@ function generateSmartSuggestions(onboardingData: OnboardingData | null): Sugges
         description: 'Stop being the bottleneck in your own business',
         explanation: 'If your business can\'t run without you handling everything personally, you don\'t have a business—you have a job. Systems are the documented processes and workflows that let your business operate consistently, whether you\'re there or not. This is how you scale, how you hire effectively, and how you eventually get your time back.',
         feature: 'Systems',
-        featureLink: '/revenue?tab=systems',
+        featureLink: '/systems',
         icon: 'settings',
         priority: 'medium',
         category: 'Operations'
@@ -158,7 +158,7 @@ function generateSmartSuggestions(onboardingData: OnboardingData | null): Sugges
       description: 'Operational chaos happens when processes live only in your head',
       explanation: `If you're constantly putting out fires, answering the same questions repeatedly, or finding that things fall through the cracks—you have an operations problem. This is incredibly common, especially for growing businesses. The root cause is usually that your processes aren't documented or systematized. Everything depends on individual knowledge rather than clear systems. For ${businessName}, fixing this means identifying your core processes (the things you do repeatedly), documenting them step-by-step, and creating systems so anyone can follow them consistently. This isn't just about efficiency—it's about reducing stress, enabling growth, and eventually being able to step back from day-to-day operations.`,
       feature: 'Systems',
-      featureLink: '/revenue?tab=systems',
+      featureLink: '/systems',
       icon: 'settings',
       priority: 'high',
       category: 'Operations'
@@ -201,7 +201,7 @@ function generateSmartSuggestions(onboardingData: OnboardingData | null): Sugges
       description: 'Your MVP\'s job is to learn fast, not to impress everyone',
       explanation: `At the MVP stage, speed of learning is everything. Your goal isn't to build a perfect product—it's to figure out what perfect even means for your customers. Every week you spend polishing features that might not matter is a week you could have spent talking to customers and iterating based on real feedback. For ${businessName}, this means launching something minimal but functional, getting it in front of real users, and obsessively collecting feedback. Our Systems tools can help you build a structured approach to customer feedback, rapid iteration, and tracking what's actually working versus what you assumed would work.`,
       feature: 'Systems',
-      featureLink: '/revenue?tab=systems',
+      featureLink: '/systems',
       icon: 'zap',
       priority: 'high',
       category: 'Product'
@@ -215,7 +215,7 @@ function generateSmartSuggestions(onboardingData: OnboardingData | null): Sugges
       description: 'Scaling without systems is like driving faster without brakes',
       explanation: `Congratulations on getting ${businessName} to the scaling stage—this is where many businesses start to really take off, but it's also where many break. The things that got you here (your personal involvement in everything, ad-hoc decisions, heroic individual efforts) won't get you to the next level. Scaling requires infrastructure: documented processes, clear organizational structure, reliable systems that don't depend on any one person. Our Systems tools help you audit your current operations, identify the bottlenecks that will break at scale, and build the foundational systems you need before growth exposes your weaknesses.`,
       feature: 'Systems',
-      featureLink: '/revenue?tab=systems',
+      featureLink: '/systems',
       icon: 'trending',
       priority: 'high',
       category: 'Scaling'
@@ -239,8 +239,8 @@ function generateSmartSuggestions(onboardingData: OnboardingData | null): Sugges
     id: 'gen-compete',
     title: 'Understand Your Competitive Landscape',
     description: 'Know what you\'re up against and find your unique edge',
-    explanation: `You can't win a game you don't understand. Knowing your competitors isn't about copying them—it's about understanding the landscape well enough to find your unique position. What are others in your space doing well? Where are they falling short? What gaps exist that ${businessName} could fill? Our Competitor Intelligence tools help you map out your competitive landscape, identify opportunities others are missing, and develop positioning that makes you stand out rather than blend in.`,
-    feature: 'Competitor Intelligence',
+    explanation: `You can't win a game you don't understand. Knowing your competitors isn't about copying them—it's about understanding the landscape well enough to find your unique position. What are others in your space doing well? Where are they falling short? What gaps exist that ${businessName} could fill? Our Competitive Intelligence tools help you map out your competitive landscape, identify opportunities others are missing, and develop positioning that makes you stand out rather than blend in.`,
+    feature: 'Competitive Intelligence',
     featureLink: '/dreampulse',
     icon: 'target',
     priority: 'low',
@@ -363,7 +363,7 @@ export function AISuggestions() {
             <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
               {loadingMessages[loadingMessageIndex]}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Generating personalized recommendations
             </p>
             <p className="text-xs text-gray-400 dark:text-gray-600 mt-2">
@@ -395,7 +395,7 @@ export function AISuggestions() {
           return (
             <div 
               key={suggestion.id} 
-              className="p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300/80 dark:hover:border-gray-700/80 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_0_rgba(0,0,0,0.3)] transition-all duration-150"
+              className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-lg border border-gray-200/60 dark:border-gray-700/60 hover:border-gray-300/80 dark:hover:border-gray-600/80 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_0_rgba(0,0,0,0.3)] transition-all duration-150"
             >
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0 bg-gray-100 dark:bg-gray-800">
@@ -406,7 +406,7 @@ export function AISuggestions() {
                     <Badge variant="outline" className="text-xs border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 bg-transparent">
                       {suggestion.priority === 'high' ? 'Important' : suggestion.priority}
                     </Badge>
-                    <span className="text-xs text-gray-500 dark:text-gray-500">{suggestion.category}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{suggestion.category}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-medium text-foreground line-clamp-1 text-base">
@@ -414,18 +414,18 @@ export function AISuggestions() {
                     </h4>
                     {isPro && <ProPlanBadge active />}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     {suggestion.description}
                   </p>
                   {!isExpanded && (
-                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-2 line-clamp-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">
                       {suggestion.explanation.substring(0, 120)}...
                     </p>
                   )}
                   {isExpanded && (
                     <div className="mt-3 space-y-3">
-                      <div className="bg-gray-50 dark:bg-gray-800/30 rounded p-3 border-l-2 border-gray-300 dark:border-gray-700">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                      <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-3 border-l-2 border-gray-300 dark:border-gray-600">
+                        <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
                           {suggestion.explanation}
                         </p>
                       </div>
@@ -436,7 +436,7 @@ export function AISuggestions() {
                       e.preventDefault()
                       setExpandedSuggestion(isExpanded ? null : suggestion.id)
                     }}
-                    className="flex items-center gap-1 mt-2 text-xs text-gray-600 dark:text-gray-400 font-medium hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                    className="flex items-center gap-1 mt-2 text-xs text-gray-600 dark:text-gray-300 font-medium hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
                     <span>{isExpanded ? 'Show less' : 'Learn more'}</span>
                     <ChevronRight className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -455,7 +455,7 @@ export function AISuggestions() {
             variant="outline" 
             className="bg-white dark:bg-gray-900 border-gray-200/60 dark:border-gray-800/60 hover:border-gray-300/80 dark:hover:border-gray-700/80 hover:bg-gray-50 dark:hover:bg-gray-800 text-foreground group shadow-[0_1px_2px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_0_rgba(0,0,0,0.3)]"
           >
-            <span>Get More Detailed Steps & Full Roadmap</span>
+            <span>View Your Visual Roadmap</span>
             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
           </Button>
         </Link>

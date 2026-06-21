@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
 import { useSessionSafe } from '@/lib/session-context'
-import { isAuthEntryPath } from '@/lib/public-routes'
+import { isAuthEntryPath, isGuestWorkspacePath } from '@/lib/public-routes'
 
 interface OnboardingGuardProps {
   children: React.ReactNode
@@ -13,6 +13,7 @@ interface OnboardingGuardProps {
 export function OnboardingGuard({ children }: OnboardingGuardProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const isGuestPath = isGuestWorkspacePath(pathname)
   const { user, isLoaded } = useUser()
   const sessionContext = useSessionSafe()
   const loading = !isLoaded
@@ -127,6 +128,10 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
         !isAuthEntryPath(pathname) &&
         pathname !== '/onboarding')
     )
+
+  if (isGuestPath) {
+    return <>{children}</>
+  }
 
   if (showRedirectSpinner) {
     return (

@@ -38,14 +38,19 @@ if (!rows?.length) {
   process.exit(1)
 }
 
-const now = new Date().toISOString()
+const now = new Date()
+const periodEnd = new Date(now)
+periodEnd.setUTCDate(periodEnd.getUTCDate() + 30)
+
 for (const row of rows) {
   const { error } = await sb
     .from('user_profiles')
     .update({
       subscription_tier: 'pro',
       subscription_status: 'active',
-      subscription_activated_at: now,
+      subscription_activated_at: now.toISOString(),
+      subscription_ends_at: periodEnd.toISOString(),
+      subscription_cancelled_at: null,
     })
     .eq('id', row.id)
 

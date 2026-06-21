@@ -1,28 +1,75 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DollarSign, BarChart3, TrendingUp, Target, Users, Zap, Calculator } from "lucide-react"
+import { DollarSign, BarChart3, TrendingUp, Target, Users, Calculator, ClipboardList } from "lucide-react"
 import RevenueDashboard from "@/components/revenue/RevenueDashboard"
 import RevenueOptimization from "@/components/revenue/RevenueOptimization"
 import PricingStrategyBuilder from "@/components/revenue/PricingStrategyBuilder"
 import RevenueGoalTracker from "@/components/revenue/RevenueGoalTracker"
 import LTVCalculator from "@/components/revenue/LTVCalculator"
 import ScenarioPlanning from "@/components/revenue/ScenarioPlanning"
-import { RevenueData, INITIAL_REVENUE_DATA } from "@/lib/revenue-types"
+import { RevenueCommandCenter } from "@/components/revenue/RevenueCommandCenter"
+import { WeeklyRevenueCheckInCard } from "@/components/revenue/WeeklyRevenueCheckInCard"
+import { RevenueWeeklyChart } from "@/components/revenue/RevenueWeeklyChart"
+import { RevenueData, INITIAL_REVENUE_DATA, type WeeklyRevenueCheckIn } from "@/lib/revenue-types"
 import { useUser } from "@clerk/nextjs"
 import * as supabaseData from "@/lib/supabase-data"
 import { useSubscriptionStatus } from "@/hooks/use-subscription-status"
+import { useSessionSafe } from "@/lib/session-context"
 import { ProPlanBadge } from "@/components/pro-plan-badge"
+import {
+  buildStarterDashboard,
+  buildStarterGoal,
+  parseOnboardingMrr,
+  parseOnboardingRevenueGoal,
+} from "@/lib/revenue/onboarding-seed"
+import { shouldAutoSeedRevenue, seedRevenueFromProfile } from "@/lib/revenue/auto-seed"
+import { normalizeRevenueData } from "@/lib/revenue/venture-quest-bridge"
+import { toast } from "sonner"
+import { Suspense } from "react"
+import { loadRevenueDataLocal, saveRevenueDataLocal } from "@/lib/revenue/persist-revenue"
 
-export default function RevenueIntelligencePage() {
+const VALID_TABS = ['dashboard', 'goals', 'checkin', 'optimization', 'pricing', 'ltv', 'scenarios'] as const
+
+function RevenueIntelligencePageContent() {
   const { user } = useUser()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const sessionContext = useSessionSafe()
   const { isPro } = useSubscriptionStatus()
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const tabParam = searchParams.get('tab')
+  const initialTab = VALID_TABS.includes(tabParam as (typeof VALID_TABS)[number])
+    ? (tabParam as (typeof VALID_TABS)[number])
+    : 'dashboard'
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [revenueData, setRevenueData] = useState<RevenueData>(INITIAL_REVENUE_DATA)
+  const [seeding, setSeeding] = useState(false)
   const hasLoadedRef = useRef(false)
+  const hasAutoSeededRef = useRef(false)
   const lastSavedRef = useRef<string>('')
+
+  const profile = sessionContext?.sessionData?.entrepreneurProfile
+  const ventureGoalTitle = sessionContext?.sessionData?.hypeos?.user?.goalTitle
+  const ventureCategory =
+    sessionContext?.sessionData?.hypeos?.user?.category || 'revenue'
+  const businessName =
+    (typeof profile?.businessName === 'string' ? profile.businessName : null) ??
+    (typeof profile?.name === 'string' ? profile.name : null) ??
+    ventureGoalTitle ??
+    undefined
+
+  useEffect(() => {
+    if (tabParam === 'systems') {
+      router.replace('/systems')
+      return
+    }
+    if (tabParam && VALID_TABS.includes(tabParam as (typeof VALID_TABS)[number])) {
+      setActiveTab(tabParam as (typeof VALID_TABS)[number])
+    }
+  }, [tabParam, router])
 
   // Load data from Supabase (if authenticated) or localStorage
   useEffect(() => {
@@ -30,56 +77,25 @@ export default function RevenueIntelligencePage() {
     
     const loadData = async () => {
       try {
-        // Try Supabase first if authenticated
+        let loaded: RevenueData | null = null
+
         if (user?.id) {
           const dbData = await supabaseData.loadRevenueData(user.id)
           if (dbData) {
-            const safeData: RevenueData = {
-              dashboards: dbData.dashboards || [],
-              optimizations: dbData.optimizations || [],
-              pricingStrategies: dbData.pricingStrategies || [],
-              goals: dbData.goals || [],
-              ltvAnalyses: dbData.ltvAnalyses || [],
-              scenarios: dbData.scenarios || []
-            }
-            setRevenueData(safeData)
-            hasLoadedRef.current = true
-            lastSavedRef.current = JSON.stringify({
-              dashboardsCount: safeData.dashboards.length,
-              optimizationsCount: safeData.optimizations.length,
-              pricingCount: safeData.pricingStrategies.length,
-              goalsCount: safeData.goals.length,
-              ltvCount: safeData.ltvAnalyses.length,
-              scenariosCount: safeData.scenarios.length
-            })
-            console.log('✅ Loaded revenue data from Supabase')
-            return
+            loaded = normalizeRevenueData(dbData as RevenueData)
           }
         }
 
-        // Fallback to localStorage
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('revenueos:data') : null
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          const safeData: RevenueData = {
-            dashboards: parsed.dashboards || [],
-            optimizations: parsed.optimizations || [],
-            pricingStrategies: parsed.pricingStrategies || [],
-            goals: parsed.goals || [],
-            ltvAnalyses: parsed.ltvAnalyses || [],
-            scenarios: parsed.scenarios || []
+        if (!loaded) {
+          const saved = typeof window !== 'undefined' ? localStorage.getItem('revenueos:data') : null
+          if (saved) {
+            loaded = normalizeRevenueData(JSON.parse(saved) as RevenueData)
           }
-          setRevenueData(safeData)
+        }
+
+        if (loaded) {
+          setRevenueData(loaded)
           hasLoadedRef.current = true
-          lastSavedRef.current = JSON.stringify({
-            dashboardsCount: safeData.dashboards.length,
-            optimizationsCount: safeData.optimizations.length,
-            pricingCount: safeData.pricingStrategies.length,
-            goalsCount: safeData.goals.length,
-            ltvCount: safeData.ltvAnalyses.length,
-            scenariosCount: safeData.scenarios.length
-          })
-          console.log('✅ Loaded revenue data from localStorage')
           return
         }
       } catch (e) {
@@ -92,6 +108,27 @@ export default function RevenueIntelligencePage() {
     loadData()
   }, [user])
 
+  // Auto-seed from onboarding when workspace is empty
+  useEffect(() => {
+    if (!hasLoadedRef.current || hasAutoSeededRef.current) return
+    if (!shouldAutoSeedRevenue(revenueData, profile)) return
+
+    hasAutoSeededRef.current = true
+    const seeded = seedRevenueFromProfile(profile, revenueData)
+    setRevenueData(seeded)
+    toast.success('Revenue workspace ready', {
+      description: 'We set up your dashboard and goal from your profile.',
+    })
+    void saveRevenueDataLocal(user?.id, seeded)
+  }, [revenueData.dashboards.length, revenueData.goals.length, profile, user?.id])
+
+  useEffect(() => {
+    if (!hasLoadedRef.current) return
+    void loadRevenueDataLocal(user?.id).then((data) => {
+      if (data) setRevenueData(data)
+    })
+  }, [activeTab, user?.id])
+
   // Save data to Supabase (if authenticated) or localStorage
   useEffect(() => {
     if (!hasLoadedRef.current) return
@@ -102,7 +139,8 @@ export default function RevenueIntelligencePage() {
       pricingCount: revenueData.pricingStrategies.length,
       goalsCount: revenueData.goals.length,
       ltvCount: revenueData.ltvAnalyses.length,
-      scenariosCount: revenueData.scenarios.length
+      scenariosCount: revenueData.scenarios.length,
+      checkInsCount: revenueData.weeklyCheckIns.length,
     })
     
     if (dataString === lastSavedRef.current) return
@@ -138,8 +176,42 @@ export default function RevenueIntelligencePage() {
   }, [revenueData, user])
 
   const updateRevenueData = (updates: Partial<RevenueData>) => {
-    setRevenueData(prev => ({ ...prev, ...updates }))
+    setRevenueData((prev) => ({ ...prev, ...updates }))
   }
+
+  const handleSeedFromProfile = useCallback(async () => {
+    setSeeding(true)
+    try {
+      const mrr = parseOnboardingMrr(profile?.monthlyRevenue ?? null)
+      const target = parseOnboardingRevenueGoal(profile?.revenueGoal ?? null, mrr)
+      const dashboard = buildStarterDashboard({ businessName, mrr })
+      const goal = buildStarterGoal({ businessName, target })
+      updateRevenueData({
+        dashboards: [...revenueData.dashboards, dashboard],
+        goals: [...revenueData.goals, goal],
+      })
+      toast.success('Revenue workspace ready', {
+        description: 'Starter dashboard and goal created from your profile.',
+      })
+    } catch {
+      toast.error('Could not set up workspace')
+    } finally {
+      setSeeding(false)
+    }
+  }, [businessName, profile?.monthlyRevenue, profile?.revenueGoal, revenueData.dashboards, revenueData.goals])
+
+  const handleCheckIn = (checkIn: WeeklyRevenueCheckIn) => {
+    updateRevenueData({
+      weeklyCheckIns: [...revenueData.weeklyCheckIns, checkIn],
+    })
+    toast.success('Weekly check-in saved')
+  }
+
+  const showSeedPrompt =
+    hasLoadedRef.current &&
+    revenueData.dashboards.length === 0 &&
+    revenueData.goals.length === 0 &&
+    !!(profile?.monthlyRevenue || profile?.revenueGoal)
 
   const stats = {
     totalDashboards: revenueData.dashboards.length,
@@ -154,7 +226,7 @@ export default function RevenueIntelligencePage() {
         <main className="ml-64 pt-8 overflow-y-auto">
           {/* Header - Ultra Minimal */}
           <div className="bg-white dark:bg-slate-950 border-b border-gray-200/60 dark:border-gray-800/60">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
               <div className="flex items-center justify-between py-8">
                 <div>
                   <h1 className="text-3xl font-medium text-gray-900 dark:text-white">
@@ -184,32 +256,53 @@ export default function RevenueIntelligencePage() {
           </div>
 
           {/* Main Content */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-12 w-full">
+            <RevenueCommandCenter
+              data={revenueData}
+              businessName={businessName}
+              isPro={!!isPro}
+              onSeedFromProfile={handleSeedFromProfile}
+              seeding={seeding}
+              showSeedPrompt={showSeedPrompt}
+              onTabChange={setActiveTab}
+            />
+            <div className="mb-8 flex flex-col gap-4 w-full">
+              <WeeklyRevenueCheckInCard
+                checkIns={revenueData.weeklyCheckIns}
+                onSubmit={handleCheckIn}
+                isPro={!!isPro}
+              />
+              <RevenueWeeklyChart checkIns={revenueData.weeklyCheckIns} />
+            </div>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 overflow-x-auto">
+              <TabsList className="flex w-full flex-wrap h-auto gap-1">
                 <TabsTrigger value="dashboard" className="flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" />
-                  <span className="hidden md:inline">Dashboard</span>
-                </TabsTrigger>
-                <TabsTrigger value="optimization" className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4" />
-                  <span className="hidden md:inline">Optimization</span>
-                </TabsTrigger>
-                <TabsTrigger value="pricing" className="flex items-center gap-2">
-                  <Target className="w-4 h-4" />
-                  <span className="hidden md:inline">Pricing</span>
+                  <span>Overview</span>
                 </TabsTrigger>
                 <TabsTrigger value="goals" className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4" />
-                  <span className="hidden md:inline">Goals</span>
+                  <span>Goals</span>
+                </TabsTrigger>
+                <TabsTrigger value="checkin" className="flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4" />
+                  <span>Check-in</span>
+                </TabsTrigger>
+                <TabsTrigger value="optimization" className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Optimize</span>
+                </TabsTrigger>
+                <TabsTrigger value="pricing" className="flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  <span>Pricing</span>
                 </TabsTrigger>
                 <TabsTrigger value="ltv" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  <span className="hidden md:inline">LTV</span>
+                  <span>LTV</span>
                 </TabsTrigger>
                 <TabsTrigger value="scenarios" className="flex items-center gap-2">
                   <Calculator className="w-4 h-4" />
-                  <span className="hidden md:inline">Scenarios</span>
+                  <span>Scenarios</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -243,6 +336,8 @@ export default function RevenueIntelligencePage() {
               <TabsContent value="goals" className="mt-6">
                 <RevenueGoalTracker 
                   goals={revenueData.goals}
+                  ventureGoalTitle={ventureGoalTitle}
+                  ventureCategory={ventureCategory}
                   onAddGoal={(goal) => updateRevenueData({
                     goals: [...revenueData.goals, goal]
                   })}
@@ -250,6 +345,15 @@ export default function RevenueIntelligencePage() {
                     goals: revenueData.goals.map(g => g.id === updatedGoal.id ? updatedGoal : g)
                   })}
                 />
+              </TabsContent>
+
+              <TabsContent value="checkin" className="mt-6 space-y-6">
+                <WeeklyRevenueCheckInCard
+                  checkIns={revenueData.weeklyCheckIns}
+                  onSubmit={handleCheckIn}
+                  isPro={!!isPro}
+                />
+                <RevenueWeeklyChart checkIns={revenueData.weeklyCheckIns} />
               </TabsContent>
 
               <TabsContent value="ltv" className="mt-6">
@@ -274,5 +378,13 @@ export default function RevenueIntelligencePage() {
         </main>
       </div>
     </div>
+  )
+}
+
+export default function RevenueIntelligencePage() {
+  return (
+    <Suspense fallback={null}>
+      <RevenueIntelligencePageContent />
+    </Suspense>
   )
 }

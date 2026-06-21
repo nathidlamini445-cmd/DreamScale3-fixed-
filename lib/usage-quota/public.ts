@@ -43,6 +43,11 @@ export function toPublicUsage(
         limit: MONTHLY_FEATURE_LIMIT,
         period,
       },
+      venture_quest: {
+        used: u.venture_quest,
+        limit: MONTHLY_FEATURE_LIMIT,
+        period,
+      },
     },
   }
 }

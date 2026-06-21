@@ -106,10 +106,11 @@ export function CancelSubscriptionDialog({
           Before you cancel Pro
         </h2>
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          This cancels DreamScale Pro and stops your monthly PayFast billing in one step.
-          You&apos;ll return to the Free plan ({CHAT_MESSAGES_PER_CYCLE} Bizora messages per
-          cycle, then a wait period, and {MONTHLY_FEATURE_LIMIT} AI runs per module per month).
-          Help us improve — why are you leaving?
+          Billing stops right away, but you keep DreamScale Pro until the end of your
+          current paid period. After that you move to the Free plan (
+          {CHAT_MESSAGES_PER_CYCLE} Bizora messages per cycle, then a wait period, and{' '}
+          {MONTHLY_FEATURE_LIMIT} AI runs per module per month). Help us improve — why are
+          you leaving?
         </p>
 
         <fieldset className="mt-5 space-y-2">

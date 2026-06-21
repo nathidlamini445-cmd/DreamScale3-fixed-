@@ -18,7 +18,7 @@ export default function SquadsPage() {
         {/* Back Button */}
         <div className="mb-6">
           <button
-            onClick={() => router.push('/hypeos')}
+            onClick={() => router.push('/venture-quest')}
             className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -79,7 +79,7 @@ export default function SquadsPage() {
 
             <Button 
               className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 font-medium"
-              onClick={() => router.push('/hypeos')}
+              onClick={() => router.push('/venture-quest')}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back

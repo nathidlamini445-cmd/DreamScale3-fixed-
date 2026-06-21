@@ -24,20 +24,21 @@ export function ProPlanBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full shrink-0 leading-none',
-        'bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-700',
+        'pro-plan-badge inline-flex items-center gap-1 rounded-full shrink-0 leading-none',
+        'bg-white px-2 py-0.5 text-[10px] font-semibold !text-gray-800',
         'border border-gray-200/90 shadow-sm',
+        '[&_span]:!text-gray-800',
         inverted && 'border-white/50 shadow-md',
-        'dark:bg-white dark:text-gray-800 dark:border-gray-200/80',
+        'dark:bg-white dark:!text-gray-800 dark:[&_span]:!text-gray-800 dark:border-gray-200/80',
         className
       )}
-      title="DreamScale Pro plan"
+      title="DreamScale Pro"
     >
       <BadgeCheck
-        className="w-3 h-3 shrink-0 text-[#005DFF]"
+        className="w-3 h-3 shrink-0 !text-[#005DFF]"
         aria-hidden
       />
-      <span>Pro plan</span>
+      <span className="!text-gray-800">Pro</span>
     </span>
   )
 }

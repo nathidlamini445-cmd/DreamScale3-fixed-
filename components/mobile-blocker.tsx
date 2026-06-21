@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import { isGuestWorkspacePath } from '@/lib/public-routes'
 import { Monitor, Smartphone } from 'lucide-react'
 import Image from 'next/image'
 
@@ -24,9 +25,11 @@ export function MobileBlocker({ children }: { children: React.ReactNode }) {
   const [isBlocked, setIsBlocked] = useState(false)
 
   // Check if current route is allowed on mobile
-  const isAllowedRoute = MOBILE_ALLOWED_ROUTES.some(route => 
-    pathname === route || pathname.startsWith(route + '/')
-  )
+  const isAllowedRoute =
+    isGuestWorkspacePath(pathname) ||
+    MOBILE_ALLOWED_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(route + '/')
+    )
 
   useEffect(() => {
     const checkMobile = () => {

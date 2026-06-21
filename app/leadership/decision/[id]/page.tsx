@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Calendar, Target, CheckCircle2, XCircle, AlertTriangle, TrendingUp } from "lucide-react"
 import { Decision } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,30 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 export default function LeadershipDecisionDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [decision, setDecision] = useState<Decision | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadDecision = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const leadershipData = JSON.parse(saved)
-          const decisions = leadershipData.decisions || []
-          const foundDecision = decisions.find((d: Decision) => d.id === params.id)
-          if (foundDecision) {
-            setDecision(foundDecision)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load decision:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadDecision()
-  }, [params.id])
+  const { item: decision, loading } = useLeadershipDetail<Decision>('decisions', params.id)
 
   if (loading) {
     return (

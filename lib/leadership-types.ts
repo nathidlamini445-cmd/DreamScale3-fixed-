@@ -300,6 +300,13 @@ export interface Feedback360 {
   date: string
 }
 
+export interface LeadershipAdvice {
+  id: string
+  problem: string
+  advice: string
+  date: string
+}
+
 export interface LeadershipData {
   styleAssessment: LeadershipStyleAssessment | null
   decisions: Decision[]
@@ -308,6 +315,7 @@ export interface LeadershipData {
   routines: CEORoutine[]
   challenges: LeadershipChallenge[]
   feedback360: Feedback360[]
+  problemSolverAdvice: LeadershipAdvice[]
 }
 
 export const INITIAL_LEADERSHIP_DATA: LeadershipData = {
@@ -317,6 +325,7 @@ export const INITIAL_LEADERSHIP_DATA: LeadershipData = {
   conflicts: [],
   routines: [],
   challenges: [],
-  feedback360: []
+  feedback360: [],
+  problemSolverAdvice: [],
 }
 

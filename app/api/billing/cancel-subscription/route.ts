@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth-guard'
 import { createClient } from '@supabase/supabase-js'
-import { isDreamScalePro } from '@/lib/subscription'
+import {
+  addBillingPeriodEnd,
+  formatSubscriptionEndDate,
+  isDreamScalePro,
+  resolveSubscriptionPeriodEnd,
+} from '@/lib/subscription'
 import { cancelPayfastSubscription } from '@/lib/payfast/cancel-subscription-api'
 
 const REASON_LABELS: Record<string, string> = {
@@ -41,14 +46,14 @@ export async function POST(request: Request) {
   const { data: profile } = await supabase
     .from('user_profiles')
     .select(
-      'subscription_tier, subscription_status, email, payfast_token'
+      'subscription_tier, subscription_status, subscription_ends_at, subscription_activated_at, email, payfast_token'
     )
     .eq('id', authResult.user.id)
     .maybeSingle()
 
-  if (!isDreamScalePro(profile)) {
+  if (!isDreamScalePro(profile) || profile?.subscription_status !== 'active') {
     return NextResponse.json(
-      { error: 'You do not have an active Pro subscription.' },
+      { error: 'You do not have an active Pro subscription to cancel.' },
       { status: 400 }
     )
   }
@@ -116,11 +121,22 @@ export async function POST(request: Request) {
     }
   }
 
+  const now = new Date()
+  let periodEnd = resolveSubscriptionPeriodEnd(profile)
+  if (!periodEnd || periodEnd.getTime() <= now.getTime()) {
+    periodEnd = addBillingPeriodEnd(now)
+  }
+
+  const periodEndIso = periodEnd.toISOString()
+  const periodEndLabel = formatSubscriptionEndDate(periodEndIso)
+
   const { error } = await supabase
     .from('user_profiles')
     .update({
-      subscription_tier: 'free',
-      subscription_status: 'cancelled',
+      subscription_tier: 'pro',
+      subscription_status: 'cancel_at_period_end',
+      subscription_ends_at: periodEndIso,
+      subscription_cancelled_at: now.toISOString(),
       payfast_token: null,
     })
     .eq('id', authResult.user.id)
@@ -129,21 +145,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  let message =
-    'DreamScale Pro has been cancelled. You are back on the Free plan and will not be charged again.'
+  let message = periodEndLabel
+    ? `Your subscription is cancelled. You keep DreamScale Pro until ${periodEndLabel}, then you move to Free. You will not be charged again.`
+    : 'Your subscription is cancelled. You keep DreamScale Pro until the end of your paid period, then you move to Free. You will not be charged again.'
+
   if (payfastBillingStopped) {
-    message =
-      'DreamScale Pro and your PayFast monthly billing have been cancelled. You will not be charged again.'
+    message = periodEndLabel
+      ? `PayFast billing is stopped. You keep DreamScale Pro until ${periodEndLabel}, then you move to Free.`
+      : 'PayFast billing is stopped. You keep Pro until the end of your paid period, then you move to Free.'
   } else if (payfastNote) {
-    message = `DreamScale Pro has been cancelled. ${payfastNote}`
-  } else if (!payfastToken) {
-    message =
-      'DreamScale Pro has been cancelled. You are back on the Free plan.'
+    message = `${message} ${payfastNote}`
   }
 
   return NextResponse.json({
     ok: true,
     message,
     payfastBillingStopped,
+    subscription_ends_at: periodEndIso,
   })
 }

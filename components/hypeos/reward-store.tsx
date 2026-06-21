@@ -743,7 +743,7 @@ export default function RewardStore({ userPoints, onRedeemReward, isRedeeming = 
         <div className="mb-8">
           <button 
             className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-2"
-            onClick={() => router.push('/hypeos')}
+            onClick={() => router.push('/venture-quest')}
           >
             <ArrowLeft className="h-4 w-4" />
             Back

@@ -10,6 +10,11 @@ import { RevenueOptimization } from '@/lib/revenue-types'
 import { AIResponse } from '@/components/ai-response'
 import { useUser } from '@clerk/nextjs'
 import * as supabaseData from '@/lib/supabase-data'
+import { RevenueShareBar } from '@/components/revenue/RevenueShareBar'
+import {
+  formatOptimizationForShare,
+  formatOptimizationForSheet,
+} from '@/lib/revenue/format-revenue-export'
 
 export default function OptimizationDetailPage() {
   const router = useRouter()
@@ -116,19 +121,27 @@ export default function OptimizationDetailPage() {
               <ArrowLeft className="w-4 h-4" />
               Back
             </Button>
-            <div>
-              <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
-                Optimization Analysis
-              </h1>
-              <p className="text-sm text-gray-400 dark:text-gray-500">
-                Generated on {new Date(optimization.date).toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric', 
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
+                  Optimization Analysis
+                </h1>
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  Generated on {new Date(optimization.date).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+              <RevenueShareBar
+                title="Revenue Optimization"
+                contentType="Revenue · Optimization"
+                textContent={formatOptimizationForShare(optimization)}
+                sheetExport={formatOptimizationForSheet(optimization)}
+              />
             </div>
           </div>
         </div>

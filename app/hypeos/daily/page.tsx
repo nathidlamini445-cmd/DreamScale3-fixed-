@@ -1,11 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import DailyFocusCard from '@/components/hypeos/daily-focus-card';
 import MiniWins from '@/components/hypeos/mini-wins';
+import StreakCelebration from '@/components/hypeos/streak-celebration';
+import { UsageLimitModal } from '@/components/usage-limit-modal';
 import { ArrowLeft } from 'lucide-react';
 import { useSessionSafe } from '@/lib/session-context';
+import { updateStreak, buildWeeklyProgress, type StreakData } from '@/lib/hypeos/streak-calculator';
+import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
+import { useUsageQuota } from '@/hooks/use-usage-quota';
+import {
+  getStreakMomentumMultiplier,
+  canUseLocalAiGeneration,
+  recordLocalAiGeneration,
+  VENTURE_QUEST_FREE_AI_GENS_LIMIT,
+} from '@/lib/hypeos/venture-quest-plan';
+import { MONTHLY_FEATURE_LIMIT } from '@/lib/usage-quota/types';
 
 // Mock data
 const mockTasks = [
@@ -80,6 +93,14 @@ const mockMiniWins = [
 export default function DailyFocusPage() {
   const router = useRouter();
   const sessionContext = useSessionSafe();
+  const { user: authUser } = useUser();
+  const { isPro } = useSubscriptionStatus();
+  const { usage, refresh: refreshUsage } = useUsageQuota();
+  const [upgradeModal, setUpgradeModal] = useState({
+    open: false,
+    title: '',
+    description: '',
+  });
   
   // Enable scrolling on HypeOS daily page
   useEffect(() => {
@@ -98,9 +119,13 @@ export default function DailyFocusPage() {
   const [miniWins, setMiniWins] = useState(mockMiniWins.map(w => ({ ...w, completed: false })));
   const [userPoints, setUserPoints] = useState(2450);
   const [currentStreak, setCurrentStreak] = useState(12);
+  const [longestStreak, setLongestStreak] = useState(12);
+  const [weeklyProgress, setWeeklyProgress] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false);
   const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
   const [userGoal, setUserGoal] = useState<{ goalTitle?: string; category?: string; goalTarget?: string } | null>(null);
+  const celebrationShownRef = useRef(false);
 
   // Load from localStorage on client-side only (prevents hydration mismatch)
   useEffect(() => {
@@ -242,6 +267,19 @@ export default function DailyFocusPage() {
           console.log('✅ Loaded streak from localStorage:', streak);
         }
       }
+
+      const savedLongestStreak = localStorage.getItem('hypeos:daily:longestStreak');
+      if (savedLongestStreak) {
+        const longest = parseInt(savedLongestStreak, 10);
+        if (!isNaN(longest)) {
+          setLongestStreak(longest);
+        }
+      } else {
+        const sessionUser = sessionContext?.sessionData?.hypeos?.user;
+        if (sessionUser?.longestStreak) {
+          setLongestStreak(sessionUser.longestStreak);
+        }
+      }
       
       // Load user goal data from session context (preferred) or localStorage
       try {
@@ -369,6 +407,65 @@ export default function DailyFocusPage() {
     }
   }, [currentStreak, hasLoadedFromStorage]);
 
+  // Show Duolingo-style streak celebration when all daily tasks are complete
+  useEffect(() => {
+    if (!hasLoadedFromStorage) return;
+    if (tasks.length === 0 || !tasks.every((t) => t.completed)) return;
+
+    const todayKey = new Date().toDateString();
+    const celebrationKey = `hypeos-daily-streak-celebration-${todayKey}`;
+    if (celebrationShownRef.current || localStorage.getItem(celebrationKey) === 'shown') return;
+
+    celebrationShownRef.current = true;
+    localStorage.setItem(celebrationKey, 'shown');
+
+    const lastActiveRaw = localStorage.getItem('hypeos:daily:lastActiveDate');
+    const lastActive = lastActiveRaw ? new Date(lastActiveRaw) : new Date(0);
+
+    const streakData: StreakData = {
+      currentStreak,
+      longestStreak,
+      lastActiveDate: lastActive,
+      streakStartDate: lastActive,
+      totalDaysActive: currentStreak,
+    };
+
+    let updatedStreakData: StreakData;
+    if (currentStreak === 0) {
+      updatedStreakData = {
+        ...streakData,
+        currentStreak: 1,
+        longestStreak: Math.max(1, longestStreak),
+        lastActiveDate: new Date(),
+        streakStartDate: new Date(),
+        totalDaysActive: 1,
+      };
+    } else {
+      updatedStreakData = updateStreak(streakData, new Date());
+    }
+
+    setCurrentStreak(updatedStreakData.currentStreak);
+    setLongestStreak(updatedStreakData.longestStreak);
+    setWeeklyProgress(buildWeeklyProgress(updatedStreakData.currentStreak));
+    localStorage.setItem('hypeos:daily:lastActiveDate', updatedStreakData.lastActiveDate.toISOString());
+    localStorage.setItem('hypeos:daily:longestStreak', String(updatedStreakData.longestStreak));
+
+    const sessionUser = sessionContext?.sessionData?.hypeos?.user;
+    if (sessionContext?.updateHypeOSData && sessionUser) {
+      sessionContext.updateHypeOSData({
+        user: {
+          ...sessionUser,
+          currentStreak: updatedStreakData.currentStreak,
+          longestStreak: updatedStreakData.longestStreak,
+          lastActiveDate: updatedStreakData.lastActiveDate.toISOString(),
+          streakStartDate: updatedStreakData.streakStartDate.toISOString(),
+        },
+      });
+    }
+
+    setShowStreakCelebration(true);
+  }, [tasks, hasLoadedFromStorage, currentStreak, longestStreak, sessionContext]);
+
   const completeTask = (taskId: number) => {
     try {
       const task = tasks.find(t => t.id === taskId);
@@ -466,7 +563,43 @@ export default function DailyFocusPage() {
 
   // AI-powered task generation based on user's goal and niche
   const generateAITasks = async () => {
-    if (isGeneratingTasks) return; // Prevent double-clicks
+    if (isGeneratingTasks) return;
+
+    if (!isPro) {
+      if (authUser?.id) {
+        const bucket = usage?.monthly?.venture_quest;
+        if (bucket && bucket.used >= bucket.limit) {
+          setUpgradeModal({
+            open: true,
+            title: 'AI task limit reached',
+            description: `You've used your ${MONTHLY_FEATURE_LIMIT} free Venture Quest AI task generations this month. Upgrade to Pro for unlimited personalized tasks.`,
+          });
+          return;
+        }
+        const res = await fetch('/api/hypeos/consume-ai-generation', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          setUpgradeModal({
+            open: true,
+            title: 'AI task limit reached',
+            description: `You've used your ${MONTHLY_FEATURE_LIMIT} free Venture Quest AI task generations this month. Upgrade to Pro for unlimited personalized tasks.`,
+          });
+          return;
+        }
+        void refreshUsage();
+      } else if (!canUseLocalAiGeneration()) {
+        setUpgradeModal({
+          open: true,
+          title: 'AI task limit reached',
+          description: `Free plan includes ${VENTURE_QUEST_FREE_AI_GENS_LIMIT} AI task generations per month. Sign in and upgrade to Pro for unlimited tasks.`,
+        });
+        return;
+      } else {
+        recordLocalAiGeneration();
+      }
+    }
     
     setIsGeneratingTasks(true);
     
@@ -612,7 +745,7 @@ export default function DailyFocusPage() {
         {/* Back Button */}
         <div className="mb-6">
           <button
-            onClick={() => router.push('/hypeos')}
+            onClick={() => router.push('/venture-quest')}
             className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -639,7 +772,7 @@ export default function DailyFocusPage() {
             onTaskComplete={completeTask}
             onTaskSkip={skipTask}
             streak={currentStreak}
-            momentumMultiplier={currentStreak >= 3 ? 1.5 : 1.0}
+            momentumMultiplier={getStreakMomentumMultiplier(currentStreak, isPro)}
           />
 
           {/* Mini Wins */}
@@ -674,6 +807,21 @@ export default function DailyFocusPage() {
           </button>
         </div>
       </div>
+
+      <StreakCelebration
+        isOpen={showStreakCelebration}
+        onClose={() => setShowStreakCelebration(false)}
+        currentStreak={currentStreak}
+        longestStreak={longestStreak}
+        weeklyProgress={weeklyProgress}
+      />
+
+      <UsageLimitModal
+        open={upgradeModal.open}
+        onOpenChange={(open) => setUpgradeModal((m) => ({ ...m, open }))}
+        title={upgradeModal.title}
+        description={upgradeModal.description}
+      />
     </div>
   );
 }

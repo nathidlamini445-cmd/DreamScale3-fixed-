@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, Zap, Atom, Settings, Crown, Users, Layers, Search, BookOpen, DollarSign, MessageSquare, Play } from "lucide-react"
+import { Home, Zap, Atom, Settings, Crown, Users, Layers, Search, BookOpen, DollarSign, MessageSquare, Play, Cpu } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import Image from "next/image"
@@ -32,11 +32,12 @@ export function SidebarNav() {
     { icon: Home, label: t("nav.home"), labelKey: "Home", href: "/dashboard", aiPowered: false },
     { icon: Zap, label: t("nav.discover"), labelKey: "Discover", href: "/discover", aiPowered: false },
     { icon: Atom, label: t("nav.bizoraAI"), labelKey: "Bizora AI", href: "/bizora", aiPowered: true },
-    { icon: Settings, label: t("nav.systems"), labelKey: "Systems", href: "/revenue", aiPowered: true },
+    { icon: Settings, label: t("nav.systems"), labelKey: "Systems", href: "/systems", aiPowered: true },
     { icon: DollarSign, label: t("nav.revenue"), labelKey: "Revenue", href: "/revenue-intelligence", aiPowered: true },
     { icon: Crown, label: t("nav.leadership"), labelKey: "Leadership", href: "/marketplace", aiPowered: true },
     { icon: Users, label: t("nav.teams"), labelKey: "Teams", href: "/teams", aiPowered: true },
-    { icon: Search, label: t("nav.competitorIntelligence"), labelKey: "Competitor Intelligence", href: "/dreampulse", aiPowered: true },
+    { icon: Search, label: t("nav.competitorIntelligence"), labelKey: "Competitive Intelligence", href: "/dreampulse", aiPowered: true },
+    { icon: Cpu, label: "Venture Quest", labelKey: "Venture Quest", href: "/venture-quest", aiPowered: true },
     { icon: Play, label: "Tutorial", labelKey: "Tutorial", href: "https://www.loom.com/share/61f7be6693ef4e4ba7a61f8c14e7f446", aiPowered: false, isExternal: true },
   ]
   
@@ -103,6 +104,7 @@ export function SidebarNav() {
       case "Revenue": markFeatureAsSeen('revenue'); break
       case "Leadership": markFeatureAsSeen('pitchpoint'); break
       case "Teams": markFeatureAsSeen('teams'); break
+      case "Venture Quest": markFeatureAsSeen('hypeos'); break
     }
   }
   
@@ -135,7 +137,7 @@ export function SidebarNav() {
           const isActive = item.href === "/dashboard" 
             ? pathname === "/" || pathname === "/dashboard"
             : pathname === item.href || pathname.startsWith(item.href + "/")
-          const isDreamPulse = item.labelKey === "Competitor Intelligence"
+          const isDreamPulse = item.labelKey === "Competitive Intelligence"
           const isTutorial = item.labelKey === "Tutorial"
           const isExternal = (item as any).isExternal
           
@@ -207,7 +209,7 @@ export function SidebarNav() {
               </Link>
               )}
               
-              {/* Saved Analysis Button - Only show for DreamPulse */}
+              {/* Saved Analysis Button - Only show for DreamPulse when active */}
               {isDreamPulse && isActive && (
                 <button
                   onClick={(e) => {

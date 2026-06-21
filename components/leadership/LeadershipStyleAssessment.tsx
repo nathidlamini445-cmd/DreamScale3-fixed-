@@ -289,7 +289,7 @@ export default function LeadershipStyleAssessment({ data, onComplete }: Leadersh
           isOpen={shareModal.isOpen}
           onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
           messageContent={shareModal.content}
-          contentType="Leadership Style Assessment"
+          contentType="Leadership · Style Assessment"
           contentTitle={shareModal.title}
         />
       </>
@@ -311,7 +311,7 @@ export default function LeadershipStyleAssessment({ data, onComplete }: Leadersh
           isOpen={shareModal.isOpen}
           onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
           messageContent={shareModal.content}
-          contentType="Leadership Style Assessment"
+          contentType="Leadership · Style Assessment"
           contentTitle={shareModal.title}
         />
       </>
@@ -365,7 +365,7 @@ export default function LeadershipStyleAssessment({ data, onComplete }: Leadersh
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType="Leadership Style Assessment"
+        contentType="Leadership · Style Assessment"
         contentTitle={shareModal.title}
       />
     </div>

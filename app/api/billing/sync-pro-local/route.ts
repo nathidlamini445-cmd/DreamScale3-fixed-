@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/auth-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { addBillingPeriodEnd } from '@/lib/subscription'
 
 /**
  * Local dev only: PayFast ITN cannot reach localhost without ngrok.
@@ -18,12 +19,15 @@ export async function POST() {
 
   try {
     const admin = createAdminClient()
+    const now = new Date()
     const { error } = await admin
       .from('user_profiles')
       .update({
         subscription_tier: 'pro',
         subscription_status: 'active',
-        subscription_activated_at: new Date().toISOString(),
+        subscription_activated_at: now.toISOString(),
+        subscription_ends_at: addBillingPeriodEnd(now).toISOString(),
+        subscription_cancelled_at: null,
       })
       .eq('id', user.id)
 

@@ -24,10 +24,18 @@ import { useSessionSafe } from '@/lib/session-context'
 import { useUser } from '@clerk/nextjs'
 import * as supabaseData from '@/lib/supabase-data'
 import { createDataProxyClient } from '@/lib/supabase/data-proxy-client'
+import { toast } from 'sonner'
 
 // Clerk (not Supabase Auth) is the auth source, so the anon browser client is blocked by
 // RLS on systems_data. Route through the service-role-backed /api/db proxy (per-user scoped).
 const supabase = createDataProxyClient()
+
+export interface HealthAnalysis {
+  score?: number
+  recommendations?: string[]
+  issues?: string[]
+  strengths?: string[]
+}
 
 export interface BusinessSystem {
   id: string
@@ -42,6 +50,7 @@ export interface BusinessSystem {
   automationOpportunities: string[]
   visualFlow?: string
   templateName?: string
+  healthAnalysis?: HealthAnalysis
 }
 
 export interface Workflow {
@@ -194,6 +203,7 @@ export default function SystemBuilder() {
     stage: 'idea' | 'mvp' | 'scaling'
     templateName?: string
     templateId?: string
+    additionalInfo?: string
   }) => {
     setIsGenerating(true)
     if (businessData.templateId) {
@@ -345,7 +355,7 @@ export default function SystemBuilder() {
         } catch (error) {
           console.error('❌ Failed to save new system to Supabase:', error)
           const errorMessage = error instanceof Error ? error.message : 'Failed to save system'
-          alert(`Error saving system: ${errorMessage}`)
+          toast.error('Error saving system', { description: errorMessage })
           // Don't update local state on error - keep it as is
         }
       } else {
@@ -387,7 +397,7 @@ export default function SystemBuilder() {
     } catch (error) {
       console.error('❌ Failed to generate system:', error)
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate system. Please try again.'
-      alert(errorMessage)
+      toast.error('Generation failed', { description: errorMessage })
       setGeneratingTemplateId(null)
     } finally {
       setIsGenerating(false)

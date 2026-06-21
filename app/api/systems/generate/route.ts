@@ -1,13 +1,80 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createClient } from '@supabase/supabase-js'
 import { requireMonthlyQuota } from '@/lib/usage-quota/require-monthly'
+
+type ProfileContext = {
+  businessName: string | null
+  industry: string | null
+  challenges: string | null
+  revenueModel: string | null
+  targetMarket: string | null
+  sixMonthGoal: string | null
+  monthlyRevenue: string | null
+}
+
+const joinList = (value: unknown): string | null => {
+  if (Array.isArray(value)) {
+    const cleaned = value.filter((v) => typeof v === 'string' && v.trim())
+    return cleaned.length ? cleaned.join(', ') : null
+  }
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+async function loadProfileContext(userId: string): Promise<ProfileContext | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url?.trim() || !serviceKey?.trim()) return null
+
+  try {
+    const supabase = createClient(url.trim(), serviceKey.trim())
+    const { data } = await supabase
+      .from('user_profiles')
+      .select(
+        'business_name, industry, biggest_challenges, revenue_model, target_market, six_month_goal, mrr'
+      )
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!data) return null
+    return {
+      businessName: joinList(data.business_name),
+      industry: joinList(data.industry),
+      challenges: joinList(data.biggest_challenges),
+      revenueModel: joinList(data.revenue_model),
+      targetMarket: joinList(data.target_market),
+      sixMonthGoal: joinList(data.six_month_goal),
+      monthlyRevenue: joinList(data.mrr),
+    }
+  } catch {
+    return null
+  }
+}
+
+function buildBusinessContext(
+  profile: ProfileContext | null,
+  additionalInfo?: string
+): string {
+  const lines: string[] = []
+  if (profile?.businessName) lines.push(`- Business Name: ${profile.businessName}`)
+  if (profile?.industry) lines.push(`- Industry: ${profile.industry}`)
+  if (profile?.targetMarket) lines.push(`- Target Market: ${profile.targetMarket}`)
+  if (profile?.revenueModel) lines.push(`- Revenue Model: ${profile.revenueModel}`)
+  if (profile?.monthlyRevenue) lines.push(`- Current Monthly Revenue: ${profile.monthlyRevenue}`)
+  if (profile?.challenges) lines.push(`- Biggest Challenges: ${profile.challenges}`)
+  if (profile?.sixMonthGoal) lines.push(`- 6-Month Goal: ${profile.sixMonthGoal}`)
+  if (additionalInfo?.trim()) lines.push(`- Additional Context: ${additionalInfo.trim()}`)
+
+  if (lines.length === 0) return ''
+  return `\nReal business profile (tailor the system specifically to this — reference their challenges and goals directly in workflows, metrics, and automation opportunities):\n${lines.join('\n')}\n`
+}
 
 export async function POST(request: NextRequest) {
   try {
     const quotaGate = await requireMonthlyQuota('systems')
     if (quotaGate.error) return quotaGate.error
 
-    const { type, teamSize, stage } = await request.json()
+    const { type, teamSize, stage, additionalInfo } = await request.json()
     
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
@@ -16,8 +83,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const profile = await loadProfileContext(quotaGate.user.id)
+    const businessContext = buildBusinessContext(profile, additionalInfo)
+
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const modelName = process.env.GEMINI_MODEL || 'gemini-pro'
+    const modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash'
     const maxTokens = parseInt(process.env.GEMINI_MAX_TOKENS || '16384')
     const temperature = parseFloat(process.env.GEMINI_TEMPERATURE || '0.8')
 
@@ -70,7 +140,7 @@ The response must be valid JSON with this structure:
 - Business Type: ${type}
 - Team Size: ${teamSize}
 - Stage: ${stage}
-
+${businessContext}
 Create a comprehensive system that includes:
 1. Multiple workflows (3-5 workflows) with step-by-step processes
 2. Recommended tools (5-10 tools) that are appropriate for this business type and stage
@@ -80,7 +150,7 @@ Create a comprehensive system that includes:
 6. Visual flowchart representation in Mermaid format for at least one workflow
 
 Make it practical, actionable, and tailored to the business stage. For "idea" stage, focus on validation and setup. For "mvp" stage, focus on core operations. For "scaling" stage, focus on efficiency and automation.
-
+${businessContext ? 'IMPORTANT: This is for a real, specific business. Name workflows after their actual processes, pick tools that fit their revenue model and budget stage, and design metrics that directly measure progress on their stated challenges and goals. Avoid generic filler.' : ''}
 Return ONLY valid JSON, no markdown formatting, no code blocks.`
 
     const result = await model.generateContent(prompt)
@@ -140,6 +210,18 @@ Return ONLY valid JSON, no markdown formatting, no code blocks.`
       responsibilities: Array.isArray(role.responsibilities) ? role.responsibilities : (role.responsibilities ? [role.responsibilities] : [])
     }))
     
+    system.tools = system.tools.map((tool: unknown) => {
+      if (typeof tool === 'string') return tool.trim()
+      if (tool && typeof tool === 'object') {
+        const t = tool as { name?: string; use?: string; description?: string }
+        if (t.name && (t.use || t.description)) {
+          return `${t.name}: ${t.use ?? t.description}`
+        }
+        if (t.name) return t.name
+      }
+      return String(tool ?? '').trim()
+    }).filter(Boolean)
+
     // Validate metrics have required fields
     system.metrics = system.metrics.map((metric: any, index: number) => ({
       name: metric.name || `Metric ${index + 1}`,

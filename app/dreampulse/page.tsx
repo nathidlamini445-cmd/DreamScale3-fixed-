@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, DollarSign, ArrowLeft } from "lucide-react"
+import { Search, DollarSign, ArrowLeft, Cpu, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import DreamPulseWizard from "@/components/dreampulse/DreamPulseWizard"
 import RevenueIntelligence from "@/components/dreampulse/RevenueIntelligence"
@@ -48,7 +48,7 @@ function DreamPulseContent() {
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <Search className="w-4 h-4" />
-                <span>Competitor Intelligence</span>
+                <span>Competitive Intelligence</span>
               </TabsTrigger>
               <TabsTrigger 
                 value="revenue" 
@@ -63,7 +63,17 @@ function DreamPulseContent() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="competitor" className="mt-0">
+            <TabsContent value="competitor" className="mt-0 space-y-6">
+              <div className="flex justify-end">
+                <Link
+                  href="/venture-quest"
+                  className="group inline-flex items-center gap-2 rounded-lg border border-[#39d2c0]/30 bg-[#39d2c0]/10 px-4 py-2.5 text-sm font-medium text-[#0d9488] transition-all hover:border-[#39d2c0]/50 hover:bg-[#39d2c0]/15 dark:text-[#39d2c0]"
+                >
+                  <Cpu className="h-4 w-4" />
+                  Venture Quest
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </div>
               <DreamPulseWizard />
             </TabsContent>
 
@@ -110,7 +120,7 @@ export default function DreamPulsePage() {
                     <div className="animate-spin rounded-full h-12 w-12 border-2 border-gray-200 dark:border-gray-700 border-t-[#2563eb] mx-auto"></div>
                     <div className="absolute inset-0 animate-ping rounded-full h-12 w-12 border-2 border-[#2563eb] opacity-20"></div>
                   </div>
-                  <p className="text-gray-600 dark:text-gray-400 font-medium">Loading DreamPulse...</p>
+                  <p className="text-gray-600 dark:text-gray-400 font-medium">Loading Competitive Intelligence...</p>
                 </div>
               </div>
             </div>

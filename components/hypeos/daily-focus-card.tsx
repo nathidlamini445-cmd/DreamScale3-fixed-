@@ -139,7 +139,7 @@ export default function DailyFocusCard({
                 if (!(e.target as HTMLElement).closest('.task-actions') && 
                     !(e.target as HTMLElement).closest('input') &&
                     !(e.target as HTMLElement).closest('button')) {
-                  router.push(`/hypeos/task/${task.id}`)
+                  router.push(`/venture-quest/task/${task.id}`)
                 }
               }}
             >
@@ -166,7 +166,7 @@ export default function DailyFocusCard({
                   <div className="flex-1 min-w-0">
                     {/* Task Title - Clickable with Blue Shimmer */}
                     <Link 
-                      href={`/hypeos/task/${task.id}`}
+                      href={`/venture-quest/task/${task.id}`}
                       className={`text-sm mb-1 flex items-center gap-1.5 group ${
                         isCompleted 
                           ? 'text-gray-400 dark:text-gray-500 line-through' 

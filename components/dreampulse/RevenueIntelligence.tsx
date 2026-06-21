@@ -12,6 +12,7 @@ import { Loader2, DollarSign, TrendingUp, BarChart3, Target, Zap } from "lucide-
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { AnalysisItemCard } from '../teams/AnalysisItemCard'
+import { formatRevenueAnalysisForShare } from '@/lib/export/share-content'
 
 interface RevenueAnalysis {
   id: string
@@ -251,6 +252,9 @@ export default function RevenueIntelligence(props: RevenueIntelligenceProps = {}
                 onDelete={handleDelete}
                 type="task"
                 detailRoute={`/dreampulse/revenue/${analysis.id}`}
+                shareContent={formatRevenueAnalysisForShare(analysis)}
+                shareContentType="Competitive Intelligence · Revenue"
+                revenueAnalysis={analysis}
               >
                 {/* Detailed View Content */}
                 <div className="space-y-4">

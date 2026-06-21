@@ -540,7 +540,7 @@ export default function DecisionMakingAssistant({ decisions, onAddDecision }: De
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType="Decision Analysis"
+        contentType="Leadership · Decision Analysis"
         contentTitle={shareModal.title}
       />
     </div>

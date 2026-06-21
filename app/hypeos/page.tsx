@@ -18,6 +18,7 @@ import DailyQuests from '@/components/hypeos/daily-quests';
 import StreakCelebration from '@/components/hypeos/streak-celebration';
 import DailyGoalCard from '@/components/hypeos/daily-goal-card';
 import ReviewQueueCard from '@/components/hypeos/review-queue-card';
+import LearnShell from '@/components/hypeos/learn-shell';
 import { Celebration } from '@/components/hypeos/celebration';
 import { useSessionSafe } from '@/lib/session-context';
 import { useUser } from '@clerk/nextjs';
@@ -27,16 +28,24 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
   Quest, 
-  updateQuestProgress, 
-  checkQuestCompletions, 
-  saveQuestProgress,
-  calculateQuestProgress,
-  initializeQuests
+  initializeQuests,
+  freshQuestsForGoal,
 } from '@/lib/hypeos/quest-system';
+import {
+  recordPathStepComplete,
+  recordTaskListComplete,
+  loadDailyQuestActivity,
+  seedDailyActivityFromTasks,
+  syncQuestsWithDailyActivity,
+  applyQuestRewards,
+} from '@/lib/hypeos/daily-quest-sync';
+import { applyVentureQuestStepToRevenue } from '@/lib/revenue/venture-quest-bridge';
 import { 
   updateStreak, 
+  applyTodayActivityToStreak,
   getStreakMultiplier,
   getStreakLevel,
+  syncStreakOnLoad,
   checkAndResetStreakIfNeeded,
   type StreakData 
 } from '@/lib/hypeos/streak-calculator';
@@ -59,6 +68,33 @@ import {
   type GoalDifficulty
 } from '@/lib/hypeos/daily-goals';
 import { getLevelFromPoints } from '@/lib/hypeos/points-system';
+import {
+  buildGoalId,
+  loadGoalSnapshot,
+  saveGoalSnapshot,
+} from '@/lib/hypeos/goal-storage';
+import {
+  loadSkillTree,
+  saveSkillTree,
+  getRecommendedSkill,
+  initializeSkillTree,
+  type SkillTree,
+} from '@/lib/hypeos/skill-tree';
+import {
+  buildUserSkillStats,
+  syncSkillTreeWithUserProgress,
+  getMasteredSkillIds,
+} from '@/lib/hypeos/sync-skill-tree';
+import { completeNextPathStep } from '@/lib/hypeos/path-progress';
+import {
+  getStreakMomentumMultiplier,
+  canUseLocalPathStep,
+  recordLocalPathStep,
+  VENTURE_QUEST_FREE_DAILY_PATH_STEPS,
+  VENTURE_QUEST_FREE_MAX_GOALS,
+} from '@/lib/hypeos/venture-quest-plan';
+import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
+import { UsageLimitModal } from '@/components/usage-limit-modal';
 import {
   generateDailyReviewQueue,
   type DailyReviewQueue
@@ -129,6 +165,26 @@ interface MiniWin {
   time: string;
   category?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+}
+
+function userToStreakData(user: User): StreakData {
+  return {
+    currentStreak: user.currentStreak ?? 0,
+    longestStreak: user.longestStreak ?? 0,
+    lastActiveDate: user.lastActiveDate ? new Date(user.lastActiveDate) : new Date(0),
+    streakStartDate: user.streakStartDate ? new Date(user.streakStartDate) : new Date(),
+    totalDaysActive: user.currentStreak ?? 0,
+  };
+}
+
+function mergeStreakIntoUser(user: User, streak: StreakData): User {
+  return {
+    ...user,
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    lastActiveDate: streak.lastActiveDate.toISOString(),
+    streakStartDate: streak.streakStartDate.toISOString(),
+  };
 }
 
 // Onboarding Wizard Component (moved before main component)
@@ -499,6 +555,15 @@ export default function HypeOSPage() {
   const sessionContext = useSessionSafe();
   const sessionData = sessionContext?.sessionData || null;
   const updateHypeOSData = sessionContext?.updateHypeOSData || (() => {});
+  const { isPro } = useSubscriptionStatus();
+  const [upgradeModal, setUpgradeModal] = useState({
+    open: false,
+    title: '',
+    description: '',
+  });
+  const openVentureQuestUpgrade = (title: string, description: string) => {
+    setUpgradeModal({ open: true, title, description });
+  };
   const [user, setUser] = useState<User | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [miniWins, setMiniWins] = useState<MiniWin[]>([]);
@@ -534,7 +599,8 @@ export default function HypeOSPage() {
     // This prevents navigation flicker
     return false; // Changed from true to false to prevent navigation on load
   });
-  const [viewMode, setViewMode] = useState<'default' | 'quests' | 'goals'>('default');
+  const [viewMode, setViewMode] = useState<'default' | 'quests' | 'goals' | 'path'>('path');
+  const [skillTree, setSkillTree] = useState<SkillTree | null>(null);
   const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   const [weeklyProgress, setWeeklyProgress] = useState<number[]>([1, 1, 1, 1, 1, 1, 1]);
   const [allGoals, setAllGoals] = useState<User[]>([]);
@@ -822,6 +888,7 @@ export default function HypeOSPage() {
   const lastTaskDateRef = useRef<string | null>(null);
   // Track the last processed session data to prevent reprocessing
   const lastProcessedSessionRef = useRef<string>('');
+  const streakBackfillRef = useRef<string | null>(null);
 
   // Date-based seed for consistent randomization per day
   const getDateSeed = (date: Date = new Date()) => {
@@ -1821,8 +1888,11 @@ export default function HypeOSPage() {
             const today = new Date();
             const todayString = today.toDateString();
             const tasksLastDate = sessionData?.hypeos?.tasksLastDate || null;
-            const lastActiveDateStr = userToLoad.lastActiveDate || tasksLastDate || todayString;
-            const lastActiveDate = new Date(lastActiveDateStr);
+            const lastActiveDateStr =
+              userToLoad.lastActiveDate || tasksLastDate || null
+            const lastActiveDate = lastActiveDateStr
+              ? new Date(lastActiveDateStr)
+              : new Date(0)
             
             // Use updateStreak to properly calculate streak if it's a new day
             // IMPORTANT: Don't update lastActiveDate unless tasks were completed today
@@ -1835,31 +1905,29 @@ export default function HypeOSPage() {
               totalDaysActive: userToLoad.currentStreak ?? 0
             };
             
-            // Check if streak should be reset (if more than 24 hours have passed)
-            // This ensures streak resets like Duolingo - if you miss a day, it resets to 1
-            let finalStreakData = checkAndResetStreakIfNeeded(savedStreakData, today);
+            // Duolingo: missed a calendar day → streak 0 until you complete today
+            let finalStreakData = syncStreakOnLoad(savedStreakData, today);
             
-            const isNewDay = lastActiveDate.toDateString() !== todayString;
+            const isNewDay = lastActiveDate.getTime() > 0 && lastActiveDate.toDateString() !== todayString;
             const wasReset = finalStreakData.currentStreak !== savedStreakData.currentStreak;
             
             console.log('📅 Checking streak on load:', {
               originalStreak: savedStreakData.currentStreak,
               finalStreak: finalStreakData.currentStreak,
-              lastActive: lastActiveDate.toDateString(),
+              lastActive: lastActiveDate.getTime() > 0 ? lastActiveDate.toDateString() : 'never',
               today: todayString,
               isNewDay: isNewDay,
               wasReset: wasReset
             });
             
-            // If streak was reset, update lastActiveDate to current time
-            const newLastActiveDate = wasReset 
-              ? today.toISOString() 
-              : (userToLoad.lastActiveDate || lastActiveDate.toISOString());
+            const newLastActiveDate =
+              userToLoad.lastActiveDate ||
+              (lastActiveDate.getTime() > 0 ? lastActiveDate.toISOString() : undefined);
             
             const userWithOnboarding = {
               ...userToLoad,
               hasCompletedOnboarding: true,
-              // Use calculated streak data (may have been reset if >24 hours passed)
+              // Duolingo-style streak after calendar-day check
               currentStreak: finalStreakData.currentStreak,
               longestStreak: finalStreakData.longestStreak,
               lastActiveDate: newLastActiveDate,
@@ -2117,8 +2185,11 @@ export default function HypeOSPage() {
           const todayStringForGoal = todayForGoal.toDateString();
           const savedTasksLastDateForGoal = sessionData?.hypeos?.tasksLastDate || null;
           const goalToLoad = goalsList[0];
-          const lastActiveDateStr = goalToLoad.lastActiveDate || savedTasksLastDateForGoal || todayStringForGoal;
-          const lastActiveDate = new Date(lastActiveDateStr);
+          const lastActiveDateStr =
+            goalToLoad.lastActiveDate || savedTasksLastDateForGoal || null
+          const lastActiveDate = lastActiveDateStr
+            ? new Date(lastActiveDateStr)
+            : new Date(0)
           
           // Use updateStreak to properly calculate streak if it's a new day
           // IMPORTANT: Don't update lastActiveDate unless tasks were completed today
@@ -2134,20 +2205,24 @@ export default function HypeOSPage() {
           // Preserve streak if same day to prevent resetting
           // IMPORTANT: Don't update streak on page load - only preserve what's saved
           // Streak should only be updated when tasks are actually completed
-          const isNewDayForGoal = lastActiveDate.toDateString() !== todayStringForGoal;
-          let finalStreakData = savedStreakData;
+          const isNewDayForGoal =
+            lastActiveDate.getTime() > 0 &&
+            lastActiveDate.toDateString() !== todayStringForGoal
+          let finalStreakData = syncStreakOnLoad(savedStreakData, todayForGoal)
           
           // Always preserve the saved streak on page load
           // Don't call updateStreak here - it will be called when tasks are completed
           console.log('📅 Preserving streak on load (goal):', {
             streak: savedStreakData.currentStreak,
-            lastActive: lastActiveDate.toDateString(),
+            lastActive: lastActiveDate.getTime() > 0 ? lastActiveDate.toDateString() : 'never',
             today: todayStringForGoal,
             isNewDay: isNewDayForGoal
           });
           
           // Preserve the original lastActiveDate - don't update it on page load
-          const newLastActiveDateForGoal = goalToLoad.lastActiveDate || lastActiveDate.toISOString();
+          const newLastActiveDateForGoal =
+            goalToLoad.lastActiveDate ||
+            (lastActiveDate.getTime() > 0 ? lastActiveDate.toISOString() : undefined)
           
           const firstGoal = {
             ...goalToLoad,
@@ -2582,13 +2657,139 @@ export default function HypeOSPage() {
   // Load view mode preference
   useEffect(() => {
     const savedViewMode = localStorage.getItem('hypeos-view-mode');
-    if (savedViewMode === 'quests' || savedViewMode === 'default' || savedViewMode === 'goals') {
-      setViewMode(savedViewMode as 'default' | 'quests' | 'goals');
+    if (savedViewMode === 'quests' || savedViewMode === 'default' || savedViewMode === 'goals' || savedViewMode === 'path') {
+      setViewMode(savedViewMode as 'default' | 'quests' | 'goals' | 'path');
     }
   }, []);
 
+  const getSkillUserId = () =>
+    sessionData?.email || authUser?.id || user?.name || 'default-user'
+
+  const getActiveGoalId = () =>
+    currentGoalId ||
+    (user?.goalTitle && user?.category
+      ? buildGoalId(user.goalTitle, user.category)
+      : null)
+
+  const persistActiveGoalProgress = (): User[] => {
+    const goalId = getActiveGoalId()
+    if (!user?.goalTitle || !goalId) return allGoals
+
+    const skillUserId = getSkillUserId()
+    saveGoalSnapshot(skillUserId, goalId, {
+      tasks,
+      miniWins,
+      quests,
+      hypePoints: user.hypePoints,
+      currentStreak: user.currentStreak,
+      longestStreak: user.longestStreak,
+      goalProgress: user.goalProgress,
+      lastActiveDate: user.lastActiveDate,
+      streakStartDate: user.streakStartDate,
+    })
+    if (skillTree) {
+      saveSkillTree(skillUserId, skillTree, goalId)
+    }
+
+    const updatedGoals = allGoals.map((g) =>
+      buildGoalId(g.goalTitle, g.category) === goalId
+        ? {
+            ...g,
+            hypePoints: user.hypePoints,
+            currentStreak: user.currentStreak,
+            longestStreak: user.longestStreak,
+            goalProgress: user.goalProgress,
+            lastActiveDate: user.lastActiveDate,
+            streakStartDate: user.streakStartDate,
+          }
+        : g
+    )
+    setAllGoals(updatedGoals)
+    updateHypeOSData({
+      user,
+      allGoals: updatedGoals,
+      tasks,
+      miniWins,
+      quests,
+    })
+    return updatedGoals
+  }
+
+  // Sync daily quest UI with today's path + task activity (per active goal)
+  const completedTasksToday = tasks.filter((t) => t.completed).length
+  useEffect(() => {
+    if (isLoading || quests.length === 0) return
+    const goalId = getActiveGoalId()
+    if (!goalId) return
+
+    seedDailyActivityFromTasks(goalId, tasks)
+    const { updatedQuests } = syncQuestsWithDailyActivity(quests, goalId)
+    setQuests((prev) => {
+      const same =
+        prev.length === updatedQuests.length &&
+        prev.every(
+          (q, i) =>
+            q.current === updatedQuests[i].current &&
+            q.completed === updatedQuests[i].completed
+        )
+      return same ? prev : updatedQuests
+    })
+  }, [isLoading, quests.length, completedTasksToday, currentGoalId])
+
+  // Duolingo-style: break streak on load if user skipped a calendar day
+  useEffect(() => {
+    if (isLoading || !user) return
+
+    const synced = syncStreakOnLoad(userToStreakData(user))
+    if (synced.currentStreak === (user.currentStreak ?? 0)) return
+
+    const nextUser = mergeStreakIntoUser(user, synced)
+    setUser(nextUser)
+
+    const goalId = getActiveGoalId()
+    const updatedGoals = allGoals.map((g) =>
+      goalId && buildGoalId(g.goalTitle, g.category) === goalId
+        ? {
+            ...g,
+            currentStreak: nextUser.currentStreak,
+            longestStreak: nextUser.longestStreak,
+          }
+        : g
+    )
+    if (updatedGoals.some((g, i) => g.currentStreak !== allGoals[i]?.currentStreak)) {
+      setAllGoals(updatedGoals)
+    }
+    updateHypeOSData({ user: nextUser, allGoals: updatedGoals })
+  }, [isLoading, user?.goalTitle, user?.lastActiveDate])
+
+  // Load + sync skill tree when user or active goal changes
+  useEffect(() => {
+    if (!user?.goalTitle || isLoading) return
+
+    const userId = getSkillUserId()
+    const goalId = getActiveGoalId()
+    if (!goalId) return
+
+    const loaded = loadSkillTree(userId, goalId)
+    const stats = buildUserSkillStats(tasks, user.hypePoints || 0)
+    const synced = syncSkillTreeWithUserProgress(loaded, stats, { isPro })
+    setSkillTree(synced)
+    saveSkillTree(userId, synced, goalId)
+  }, [
+    user?.goalTitle,
+    user?.category,
+    user?.hypePoints,
+    tasks,
+    isLoading,
+    authUser?.id,
+    sessionData?.email,
+    user?.name,
+    isPro,
+    currentGoalId,
+  ]);
+
   // Save view mode preference (UI preference - okay to save for all users)
-  const handleViewModeChange = (mode: 'default' | 'quests' | 'goals') => {
+  const handleViewModeChange = (mode: 'default' | 'quests' | 'goals' | 'path') => {
     setViewMode(mode);
     // View mode is a UI preference, safe to save for all users
     if (typeof window !== 'undefined') {
@@ -2602,24 +2803,89 @@ export default function HypeOSPage() {
       console.warn('Cannot switch to goal: invalid goal data', goal);
       return;
     }
-    
-    const goalId = goal.goalTitle + '-' + goal.category;
-    setUser(goal);
-    setCurrentGoalId(goalId);
-    
-    // Always regenerate tasks when switching goals to match the new goal's category and title
-    generateInitialTasks(goal).catch(err => console.error('Error generating tasks:', err));
-    
-    // Save current goal selection
+
+    const skillUserId = getSkillUserId();
+    const newGoalId = buildGoalId(goal.goalTitle, goal.category);
+
+    let goalsAfterPersist = allGoals;
+    if (currentGoalId && currentGoalId !== newGoalId) {
+      goalsAfterPersist = persistActiveGoalProgress();
+    }
+
+    const goalEntry =
+      goalsAfterPersist.find(
+        (g) => buildGoalId(g.goalTitle, g.category) === newGoalId
+      ) || goal;
+
+    const snapshot = loadGoalSnapshot(skillUserId, newGoalId);
+
+    const restoredUser: User = {
+      ...goalEntry,
+      hypePoints: snapshot?.hypePoints ?? goalEntry.hypePoints ?? 0,
+      currentStreak: snapshot?.currentStreak ?? goalEntry.currentStreak ?? 0,
+      longestStreak: snapshot?.longestStreak ?? goalEntry.longestStreak ?? 0,
+      goalProgress: snapshot?.goalProgress ?? goalEntry.goalProgress ?? 0,
+      lastActiveDate: snapshot?.lastActiveDate ?? goalEntry.lastActiveDate,
+      streakStartDate: snapshot?.streakStartDate ?? goalEntry.streakStartDate,
+    }
+
+    const syncedStreak = syncStreakOnLoad(userToStreakData(restoredUser))
+    const userAfterStreak = mergeStreakIntoUser(restoredUser, syncedStreak);
+
+    let nextTasks: Task[] = [];
+    if (snapshot?.tasks?.length) {
+      nextTasks = snapshot.tasks as Task[];
+      setTasks(nextTasks);
+      setMiniWins((snapshot.miniWins as MiniWin[]) || []);
+    } else {
+      generateInitialTasks(userAfterStreak).catch((err) =>
+        console.error('Error generating tasks:', err)
+      );
+    }
+
+    const baseQuests =
+      snapshot?.quests?.length && Array.isArray(snapshot.quests)
+        ? (snapshot.quests as Quest[])
+        : freshQuestsForGoal();
+    const { updatedQuests } = syncQuestsWithDailyActivity(baseQuests, newGoalId);
+    setQuests(updatedQuests);
+
+    const loaded = loadSkillTree(skillUserId, newGoalId);
+    const stats = buildUserSkillStats(
+      nextTasks,
+      userAfterStreak.hypePoints || 0
+    );
+    const synced = syncSkillTreeWithUserProgress(loaded, stats, { isPro });
+    setSkillTree(synced);
+    saveSkillTree(skillUserId, synced, newGoalId);
+
+    setUser(userAfterStreak);
+    setCurrentGoalId(newGoalId);
+    streakBackfillRef.current = null;
+
+    const updatedGoals = goalsAfterPersist.map((g) =>
+      buildGoalId(g.goalTitle, g.category) === newGoalId ? userAfterStreak : g
+    );
+    setAllGoals(updatedGoals);
+
     updateHypeOSData({
-      user: goal,
-      allGoals: allGoals
+      user: userAfterStreak,
+      allGoals: updatedGoals,
+      tasks: nextTasks.length > 0 ? nextTasks : tasks,
+      miniWins: (snapshot?.miniWins as MiniWin[]) || miniWins,
+      quests: updatedQuests,
     });
-    
-    // Switch back to default view when switching goals
-    setViewMode('default');
-    
-    console.log('✅ Switched to goal:', goal.goalTitle);
+
+    setViewMode('path');
+
+    console.log('✅ Switched to goal:', userAfterStreak.goalTitle);
+  };
+
+  const switchToGoalById = (goalId: string) => {
+    const goal = allGoals.find(
+      (g) => buildGoalId(g.goalTitle, g.category) === goalId
+    );
+    if (goal) switchToGoal(goal);
   };
 
   // Check for daily goal completion and show celebration (only once per day)
@@ -2751,6 +3017,8 @@ export default function HypeOSPage() {
     } catch (e) {
       console.warn('Failed to immediately save task to localStorage', e);
     }
+
+    const activeGoalId = getActiveGoalId()
     
     // Update user with calculated points
     const updatedUser = {
@@ -2772,6 +3040,33 @@ export default function HypeOSPage() {
     } catch (e) {
       console.warn('Failed to immediately save user to localStorage', e);
     }
+
+    // Sync skill path progress
+    const skillUserId =
+      sessionData?.email || authUser?.id || user?.name || 'default-user'
+    setSkillTree((prev) => {
+      const base = prev ?? loadSkillTree(skillUserId, activeGoalId)
+      const beforeMastered = getMasteredSkillIds(base)
+      const stats = buildUserSkillStats(updatedTasks, updatedUser.hypePoints)
+      const synced = syncSkillTreeWithUserProgress(base, stats, { isPro })
+      const afterMastered = getMasteredSkillIds(synced)
+      const newlyMastered = afterMastered.filter((id) => !beforeMastered.includes(id))
+      if (newlyMastered.length > 0) {
+        const masteredSkill = synced.branches
+          .flatMap((b) => b.skills)
+          .find((s) => s.id === newlyMastered[0])
+        if (masteredSkill) {
+          setTimeout(() => {
+            setCelebration({
+              type: 'skill-mastered',
+              message: `Mastered ${masteredSkill.name}! +${masteredSkill.masteryReward} XP`,
+            })
+          }, 400)
+        }
+      }
+      saveSkillTree(skillUserId, synced, activeGoalId)
+      return synced
+    })
     
     // Check if this is the first task completed today and user has 0 streak
     // If so, start the streak at 1
@@ -2821,6 +3116,36 @@ export default function HypeOSPage() {
         }
       }
     }
+
+    // Update daily quests from today's activity (path steps + tasks + XP earned today)
+    if (activeGoalId) {
+      recordTaskListComplete(
+        activeGoalId,
+        completionResult.pointsEarned,
+        task.impact || 'medium'
+      );
+    }
+    const { updatedQuests, rewards } = syncQuestsWithDailyActivity(
+      quests,
+      activeGoalId || 'default'
+    );
+
+    if (rewards.length > 0) {
+      const totalRewardPoints = rewards.reduce((sum, reward) => sum + reward.points, 0);
+      finalUser = {
+        ...finalUser,
+        hypePoints: finalUser.hypePoints + totalRewardPoints,
+      };
+      setUser(finalUser);
+      setTimeout(() => {
+        setCelebration({
+          type: 'task-complete',
+          message: rewards.map((r) => r.message).join(' '),
+        });
+      }, 400);
+    }
+
+    setQuests(updatedQuests);
     
     // Immediately save tasks and updated user to session and localStorage
     // Save streak data including lastActiveDate
@@ -2844,13 +3169,29 @@ export default function HypeOSPage() {
         updateHypeOSData({
           user: userToSave,
           allGoals: allGoals.length > 0 ? allGoals.map((g: any) => 
-            g.goalTitle === userToSave.goalTitle ? userToSave : g
+            buildGoalId(g.goalTitle, g.category) === buildGoalId(userToSave.goalTitle, userToSave.category)
+              ? userToSave
+              : g
           ) : [userToSave],
           tasks: updatedTasks, // Always save the updated tasks with completed state
           miniWins,
-          quests,
+          quests: updatedQuests,
           tasksLastDate: todayDate // Save the date tasks were last updated
         });
+
+        if (activeGoalId) {
+          saveGoalSnapshot(skillUserId, activeGoalId, {
+            tasks: updatedTasks,
+            miniWins,
+            quests: updatedQuests,
+            hypePoints: userToSave.hypePoints,
+            currentStreak: userToSave.currentStreak,
+            longestStreak: userToSave.longestStreak,
+            goalProgress: userToSave.goalProgress,
+            lastActiveDate: userToSave.lastActiveDate,
+            streakStartDate: userToSave.streakStartDate,
+          });
+        }
         
         // CRITICAL: Save tasksLastDate to localStorage for ALL users (for persistence)
         try {
@@ -2882,7 +3223,7 @@ export default function HypeOSPage() {
             ) : [userToSave],
             tasks: updatedTasks, // Save completed tasks
             miniWins: miniWins,
-            quests: quests,
+            quests: updatedQuests,
             tasksLastDate: todayDate
           }
         };
@@ -2958,23 +3299,6 @@ export default function HypeOSPage() {
       console.error('Error updating review queue:', error);
     }
     
-    // Update quests
-    const progress = calculateQuestProgress(updatedTasks, finalUser.hypePoints, finalUser.currentStreak);
-    const updatedQuests = updateQuestProgress(quests, progress);
-    
-    const rewards = checkQuestCompletions(quests, updatedQuests);
-    if (rewards.length > 0) {
-      const totalRewardPoints = rewards.reduce((sum, reward) => sum + reward.points, 0);
-      finalUser = {
-        ...finalUser,
-        hypePoints: finalUser.hypePoints + totalRewardPoints
-      };
-      setUser(finalUser);
-    }
-    
-    setQuests(updatedQuests);
-    saveQuestProgress(updatedQuests);
-    
     // Check if all tasks completed for streak celebration
     const allTasksCompleted = updatedTasks.every(t => t.completed);
     
@@ -3031,7 +3355,7 @@ export default function HypeOSPage() {
           allGoals: updatedAllGoals,
           tasks: updatedTasks,
           miniWins,
-          quests
+          quests: updatedQuests
         });
         
         // Also save directly to localStorage
@@ -3044,7 +3368,7 @@ export default function HypeOSPage() {
             allGoals: updatedAllGoals,
             tasks: updatedTasks,
             miniWins: miniWins,
-            quests: quests
+            quests: updatedQuests
           }
         };
         // Only save to localStorage for unauthenticated users
@@ -3162,7 +3486,7 @@ export default function HypeOSPage() {
               allGoals: allGoals.length > 0 ? allGoals : (updatedUser ? [updatedUser] : []),
               tasks: tasks,
               miniWins: updatedMiniWins,
-              quests: quests
+              quests
             }
           };
           localStorage.setItem('dreamscale_session', JSON.stringify(updatedSession));
@@ -3185,41 +3509,76 @@ export default function HypeOSPage() {
 
   const handleOnboardingComplete = (userData: User) => {
     const userWithOnboarding = { ...userData, hasCompletedOnboarding: true };
-    setUser(userWithOnboarding);
-    setShowOnboarding(false);
-    
-    // Add to goals list (check if goal already exists to prevent duplicates)
-    const goalId = userData.goalTitle + '-' + userData.category;
-    const existingGoalIndex = allGoals.findIndex(g => (g.goalTitle + '-' + g.category) === goalId);
-    
+    const goalId = buildGoalId(userData.goalTitle, userData.category);
+    const existingGoalIndex = allGoals.findIndex(
+      (g) => buildGoalId(g.goalTitle, g.category) === goalId
+    );
+    const isNewGoal = existingGoalIndex < 0;
+
+    if (isNewGoal && user?.goalTitle && currentGoalId) {
+      persistActiveGoalProgress();
+    }
+
     let updatedGoals: User[];
     if (existingGoalIndex >= 0) {
-      // Update existing goal
       updatedGoals = [...allGoals];
       updatedGoals[existingGoalIndex] = userWithOnboarding;
     } else {
-      // Add new goal
       updatedGoals = [...allGoals, userWithOnboarding];
     }
-    
+
     setAllGoals(updatedGoals);
     setCurrentGoalId(goalId);
-    
-    // Preserve existing tasks, miniWins, and quests when adding a new goal
-    const existingTasks = tasks || [];
-    const existingMiniWins = miniWins || [];
-    const existingQuests = quests || [];
-    
-    // Immediately save to session to persist onboarding completion
-    updateHypeOSData({
-      user: userWithOnboarding,
-      allGoals: updatedGoals,
-      tasks: existingTasks,
-      miniWins: existingMiniWins,
-      quests: existingQuests
-    });
-    
-    // Force immediate save to localStorage (even if session not fully active)
+    setUser(userWithOnboarding);
+    setShowOnboarding(false);
+
+    const skillUserId = getSkillUserId();
+
+    if (isNewGoal) {
+      const freshTree = initializeSkillTree();
+      setSkillTree(freshTree);
+      saveSkillTree(skillUserId, freshTree, goalId);
+      setTasks([]);
+      setMiniWins([]);
+      const freshQuests = initializeQuests();
+      setQuests(freshQuests);
+
+      updateHypeOSData({
+        user: userWithOnboarding,
+        allGoals: updatedGoals,
+        tasks: [],
+        miniWins: [],
+        quests: freshQuests,
+      });
+
+      generateInitialTasks(userData).catch((err) =>
+        console.error('Error generating tasks:', err)
+      );
+    } else {
+      const snapshot = loadGoalSnapshot(skillUserId, goalId);
+      const restoredTasks = (snapshot?.tasks as Task[]) || tasks;
+      const restoredMiniWins = (snapshot?.miniWins as MiniWin[]) || miniWins;
+      const restoredQuests = (snapshot?.quests as Quest[]) || quests;
+
+      updateHypeOSData({
+        user: userWithOnboarding,
+        allGoals: updatedGoals,
+        tasks: restoredTasks,
+        miniWins: restoredMiniWins,
+        quests: restoredQuests,
+      });
+
+      if (snapshot?.tasks?.length) {
+        setTasks(restoredTasks);
+        setMiniWins(restoredMiniWins);
+        setQuests(restoredQuests);
+      } else {
+        generateInitialTasks(userData).catch((err) =>
+          console.error('Error generating tasks:', err)
+        );
+      }
+    }
+
     try {
       const currentSession = sessionData || {};
       const updatedSession = {
@@ -3228,24 +3587,21 @@ export default function HypeOSPage() {
           ...(currentSession as any)?.hypeos || {},
           user: userWithOnboarding,
           allGoals: updatedGoals,
-          tasks: existingTasks,
-          miniWins: existingMiniWins,
-          quests: existingQuests
-        }
+        },
       };
-      // Only save to localStorage for unauthenticated users
       if (!authUser?.id) {
         localStorage.setItem('dreamscale_session', JSON.stringify(updatedSession));
-        console.log('✅ Goal saved immediately to localStorage (unauthenticated). Total goals:', updatedGoals.length);
+        console.log(
+          '✅ Goal saved immediately to localStorage (unauthenticated). Total goals:',
+          updatedGoals.length
+        );
       }
     } catch (error) {
       console.error('Error saving goal:', error);
     }
-    
-    // Mark as loaded to prevent re-loading
+
     hasLoadedFromSession.current = true;
-    
-    generateInitialTasks(userData).catch(err => console.error('Error generating tasks:', err));
+    setViewMode('path');
   };
 
   // Early returns - show loading first, then check onboarding
@@ -3307,6 +3663,142 @@ export default function HypeOSPage() {
     return true;
   };
 
+  const handleNewGoalClick = () => {
+    if (!isPro && allGoals.length >= VENTURE_QUEST_FREE_MAX_GOALS) {
+      openVentureQuestUpgrade(
+        'Multiple goals are a Pro feature',
+        `Free plan includes ${VENTURE_QUEST_FREE_MAX_GOALS} active goal. Upgrade to Pro to track multiple goals at once.`
+      );
+      return;
+    }
+    setShowOnboarding(true);
+  };
+
+  const handleCompletePathStep = (
+    skillId: string,
+    stepLabel?: string,
+    stepXp?: number
+  ) => {
+    if (!isPro && !canUseLocalPathStep()) {
+      openVentureQuestUpgrade(
+        'Daily path limit reached',
+        `Free plan includes ${VENTURE_QUEST_FREE_DAILY_PATH_STEPS} path steps per day. Upgrade to Pro for unlimited skill path progress.`
+      );
+      return;
+    }
+    if (!isPro) recordLocalPathStep();
+
+    const skillUserId = getSkillUserId();
+    const activeGoalId = getActiveGoalId();
+    const base = skillTree ?? loadSkillTree(skillUserId, activeGoalId);
+    const result = completeNextPathStep(base, skillId);
+    if (!result) return;
+
+    saveSkillTree(skillUserId, result.tree, activeGoalId);
+    setSkillTree(result.tree);
+
+    const xp = result.points;
+    const goalId = activeGoalId || 'default';
+    recordPathStepComplete(goalId, xp, {
+      highImpact: (stepXp ?? xp) >= 85,
+    });
+
+    let nextUser = user;
+    if (user && xp > 0) {
+      nextUser = { ...user, hypePoints: user.hypePoints + xp };
+    }
+
+    if (nextUser) {
+      const updatedStreak = applyTodayActivityToStreak(userToStreakData(nextUser));
+      nextUser = mergeStreakIntoUser(nextUser, updatedStreak);
+    }
+
+    const activity = loadDailyQuestActivity(goalId);
+    updateUserHistory(
+      skillUserId,
+      activity.xpEarned,
+      activity.tasksCompleted,
+      nextUser?.currentStreak ?? 0
+    );
+
+    const { updatedQuests, rewards } = syncQuestsWithDailyActivity(quests, goalId);
+    if (rewards.length > 0 && nextUser) {
+      const applied = applyQuestRewards(nextUser, rewards);
+      nextUser = { ...nextUser, hypePoints: applied.hypePoints };
+      setTimeout(() => {
+        setCelebration({
+          type: 'task-complete',
+          message: rewards.map((r) => r.message).join(' '),
+        });
+      }, 600);
+    }
+
+    if (activeGoalId) {
+      void applyVentureQuestStepToRevenue(skillUserId, activeGoalId).then(
+        (result) => {
+          if (result?.bump) {
+            setTimeout(() => {
+              setCelebration({
+                type: 'task-complete',
+                message: `Revenue goal +${Math.round(result.bump)} toward ${result.goal.name}`,
+              });
+            }, 900);
+          }
+        }
+      );
+    }
+
+    setUser(nextUser);
+    setQuests(updatedQuests);
+
+    if (activeGoalId && nextUser) {
+      saveGoalSnapshot(skillUserId, activeGoalId, {
+        tasks,
+        miniWins,
+        quests: updatedQuests,
+        hypePoints: nextUser.hypePoints,
+        currentStreak: nextUser.currentStreak,
+        longestStreak: nextUser.longestStreak,
+        goalProgress: nextUser.goalProgress,
+        lastActiveDate: nextUser.lastActiveDate,
+        streakStartDate: nextUser.streakStartDate,
+      });
+
+      const updatedGoals = allGoals.map((g) =>
+        buildGoalId(g.goalTitle, g.category) === activeGoalId
+          ? { ...g, ...nextUser }
+          : g
+      );
+      setAllGoals(updatedGoals);
+
+      updateHypeOSData({
+        user: nextUser,
+        allGoals: updatedGoals,
+        quests: updatedQuests,
+      });
+    } else {
+      updateHypeOSData({
+        user: nextUser ?? undefined,
+        quests: updatedQuests,
+      });
+    }
+
+    const label = stepLabel || result.skillName;
+    setCelebration({
+      type: 'task-complete',
+      message: `+${xp} XP · ${label} · ${nextUser?.currentStreak || 0} day streak`,
+    });
+
+    if (result.mastered) {
+      setTimeout(() => {
+        setCelebration({
+          type: 'skill-mastered',
+          message: `Mastered ${result.skillName}! Keep going.`,
+        });
+      }, 3200);
+    }
+  };
+
   if (shouldShowOnboarding()) {
     return <OnboardingWizard onComplete={handleOnboardingComplete} />;
   }
@@ -3333,43 +3825,61 @@ export default function HypeOSPage() {
   }
 
   return (
-    <div className="hypeos-page min-h-screen bg-white dark:bg-slate-950" style={{ overflowY: 'auto', height: 'auto', minHeight: '100vh' }}>
-      {/* Top Navigation */}
+    <div
+      className={`hypeos-page min-h-screen ${viewMode === 'path' ? 'bg-[#0a0f12]' : 'bg-white dark:bg-slate-950'}`}
+      style={
+        viewMode === 'path'
+          ? { overflow: 'hidden', height: '100vh' }
+          : { overflowY: 'auto', height: 'auto', minHeight: '100vh' }
+      }
+    >
+      {/* Top Navigation — hidden in learn/path mode (uses sidebar instead) */}
+      {viewMode !== 'path' && (
       <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-slate-950">
         <div className="max-w-7xl mx-auto px-8 py-4">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => router.push('/hypeos/daily')} 
+              onClick={() => router.push('/venture-quest/daily')} 
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               Daily Focus
             </button>
             <button 
-              onClick={() => router.push('/hypeos/rewards')} 
+              onClick={() => router.push('/venture-quest/rewards')} 
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               Rewards
             </button>
             <button 
-              onClick={() => router.push('/hypeos/progress')} 
+              onClick={() => router.push('/venture-quest/progress')} 
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               Progress
             </button>
             <button 
-              onClick={() => router.push('/hypeos/squads')} 
+              onClick={() => router.push('/venture-quest/squads')} 
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               Squads
             </button>
             <div className="ml-auto flex items-center gap-4">
               <button
-                onClick={() => setShowOnboarding(true)}
+                onClick={handleNewGoalClick}
                 className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 + New Goal
               </button>
               <div className="flex items-center gap-1">
+              <button
+                onClick={() => handleViewModeChange('path')}
+                className={`px-3 py-1.5 text-sm transition-colors rounded-md ${
+                  viewMode === 'path'
+                    ? 'bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                    : 'text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-900'
+                }`}
+              >
+                Skill Path
+              </button>
               <button
                 onClick={() => handleViewModeChange('default')}
                 className={`px-3 py-1.5 text-sm transition-colors rounded-md ${
@@ -3405,7 +3915,58 @@ export default function HypeOSPage() {
         </div>
       </div>
       </div>
+      )}
 
+      {user && user.goalTitle && viewMode === 'path' ? (
+        !skillTree ? (
+          <div className="flex min-h-screen items-center justify-center bg-[#0a0f12]">
+            <p className="text-sm text-white/40">Loading your skill path…</p>
+          </div>
+        ) : (
+          <LearnShell
+            user={user}
+            skillTree={skillTree}
+            quests={quests}
+            tasks={tasks.map((t) => ({
+              title: t.title,
+              completed: t.completed,
+              category: t.category,
+            }))}
+            userStats={buildUserSkillStats(tasks, user.hypePoints || 0)}
+            masteredSkills={getMasteredSkillIds(skillTree)}
+            recommendedSkillId={
+              getRecommendedSkill(skillTree, {
+                masteredSkills: getMasteredSkillIds(skillTree),
+                completedTasks: tasks.filter((t) => t.completed).length,
+                totalPoints: user.hypePoints || 0,
+              })?.id ?? null
+            }
+            goals={allGoals
+              .filter((g) => g?.goalTitle?.trim())
+              .map((g) => ({
+                id: buildGoalId(g.goalTitle, g.category),
+                title: g.goalTitle,
+                category: g.category || 'General',
+                isActive:
+                  buildGoalId(g.goalTitle, g.category) ===
+                  (currentGoalId ||
+                    buildGoalId(user.goalTitle, user.category)),
+              }))}
+            onGoalSelect={switchToGoalById}
+            onNewGoal={handleNewGoalClick}
+            canAddGoal={isPro || allGoals.length < VENTURE_QUEST_FREE_MAX_GOALS}
+            onViewModeChange={(mode) => handleViewModeChange(mode)}
+            isPro={isPro}
+            onCompletePathStep={handleCompletePathStep}
+            onUpgradeRequest={() =>
+              openVentureQuestUpgrade(
+                'Unlock all skill paths',
+                'Upgrade to Pro for Content, Marketing, and Networking branches plus unlimited path progress.'
+              )
+            }
+          />
+        )
+      ) : (
       <div className="max-w-7xl mx-auto px-8 py-16 pt-8">
         {/* Back Button */}
         <div className="mb-6">
@@ -3431,7 +3992,7 @@ export default function HypeOSPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowOnboarding(true)}
+                onClick={handleNewGoalClick}
                 className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 {user?.goalTitle ? '+ New Goal' : 'Create Your First Goal'}
@@ -3596,7 +4157,10 @@ export default function HypeOSPage() {
                     console.log('Task skipped:', taskId);
                   }}
                   streak={user?.currentStreak || 0}
-                  momentumMultiplier={(user?.currentStreak || 0) >= 3 ? 1.5 : 1.0}
+                  momentumMultiplier={getStreakMomentumMultiplier(
+                    user?.currentStreak || 0,
+                    isPro
+                  )}
                 />
 
                 {/* Mini Wins */}
@@ -3729,7 +4293,7 @@ export default function HypeOSPage() {
                     </p>
                     <Button 
                       className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:border dark:border-gray-700 font-medium"
-                      onClick={() => setShowOnboarding(true)}
+                      onClick={handleNewGoalClick}
                     >
                       <Target className="w-4 h-4 mr-2" />
                       Create Your First Goal
@@ -3831,7 +4395,7 @@ export default function HypeOSPage() {
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                   <Button 
                     className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 font-medium w-full"
-                    onClick={() => setShowOnboarding(true)}
+                    onClick={handleNewGoalClick}
                   >
                     <Target className="w-4 h-4 mr-2" />
                     Create New Goal
@@ -3840,8 +4404,20 @@ export default function HypeOSPage() {
               </CardContent>
             </Card>
           </div>
-        ) : user && user.goalTitle ? (
+        ) : viewMode === 'quests' && user && user.goalTitle ? (
           <div className="mt-8">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Quests
+              </h2>
+              <Button
+                variant="outline"
+                className="border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 font-medium text-gray-900 dark:text-white"
+                onClick={() => handleViewModeChange('path')}
+              >
+                ← Back to Path
+              </Button>
+            </div>
             <DailyQuests
               tasks={tasks}
               userPoints={user?.hypePoints || 0}
@@ -3857,7 +4433,7 @@ export default function HypeOSPage() {
           <Button 
             variant="outline"
             className="border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 font-medium text-gray-900 dark:text-white"
-            onClick={() => window.location.href = '/hypeos/progress'}
+            onClick={() => window.location.href = '/venture-quest/progress'}
           >
             <BarChart3 className="w-4 h-4 mr-2" />
             View Progress
@@ -3865,7 +4441,7 @@ export default function HypeOSPage() {
           <Button 
             variant="outline"
             className="border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 font-medium text-gray-900 dark:text-white"
-            onClick={() => window.location.href = '/hypeos/squads'}
+            onClick={() => window.location.href = '/venture-quest/squads'}
           >
             <Users className="w-4 h-4 mr-2" />
             Leagues
@@ -3873,7 +4449,7 @@ export default function HypeOSPage() {
           <Button 
             variant="outline"
             className="border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 font-medium text-gray-900 dark:text-white"
-            onClick={() => window.location.href = '/hypeos/rewards'}
+            onClick={() => window.location.href = '/venture-quest/rewards'}
           >
             <Gift className="w-4 h-4 mr-2" />
             Rewards Store
@@ -3881,13 +4457,14 @@ export default function HypeOSPage() {
           <Button 
             variant="outline"
             className="border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 font-medium text-gray-900 dark:text-white"
-            onClick={() => window.location.href = '/hypeos/daily'}
+            onClick={() => window.location.href = '/venture-quest/daily'}
           >
             <Calendar className="w-4 h-4 mr-2" />
             More Quests
           </Button>
         </div>
       </div>
+      )}
 
       {/* Streak Celebration Modal */}
       <StreakCelebration
@@ -3907,6 +4484,13 @@ export default function HypeOSPage() {
           duration={7000}
         />
       )}
+
+      <UsageLimitModal
+        open={upgradeModal.open}
+        onOpenChange={(open) => setUpgradeModal((m) => ({ ...m, open }))}
+        title={upgradeModal.title}
+        description={upgradeModal.description}
+      />
 
     </div>
   );

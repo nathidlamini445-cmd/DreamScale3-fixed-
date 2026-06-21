@@ -88,11 +88,11 @@ export const PLAN_FEATURE_ROWS: PlanFeatureRow[] = [
 
   {
 
-    label: 'Google Calendar & Docs',
+    label: 'Google (Docs, Sheets, Calendar)',
 
     free: '—',
 
-    pro: 'Coming soon',
+    pro: 'Export & schedule events to Google',
 
     freeIncluded: false,
 
@@ -102,13 +102,27 @@ export const PLAN_FEATURE_ROWS: PlanFeatureRow[] = [
 
   {
 
-    label: 'Notion export',
+    label: 'Notion & Slack',
 
     free: '—',
 
-    pro: 'Coming soon',
+    pro: 'Export to Notion and send updates to Slack',
 
     freeIncluded: false,
+
+    proIncluded: true,
+
+  },
+
+  {
+
+    label: 'Venture Quest',
+
+    free: 'Sales path only · 3 path steps/day · 2 AI task gens/month · 1 goal',
+
+    pro: 'All skill branches, unlimited path progress, AI tasks, streak multipliers & multiple goals',
+
+    freeIncluded: true,
 
     proIncluded: true,
 
@@ -136,7 +150,7 @@ export const FREE_PLAN_HIGHLIGHTS = [
 
   'Full app access with fair monthly limits',
 
-  'Bizora, Systems, Revenue, Leadership, Teams & Competitor Intelligence',
+  'Bizora, Systems, Revenue, Leadership, Teams, Competitive Intelligence & Venture Quest',
 
   'Discover, dashboard & onboarding',
 
@@ -152,7 +166,7 @@ export const PRO_PLAN_HIGHLIGHTS = [
 
   'Unlimited file uploads',
 
-  'Google & Notion integrations (rolling out)',
+  'Google, Notion & Slack integrations',
 
 ]
 
@@ -220,7 +234,7 @@ export const PRO_FEATURE_BY_MODULE: ProFeatureModule[] = [
 
     pro:
 
-      'Unlimited revenue analysis, pricing strategy, goal tracking, LTV modeling, and what-if scenarios',
+      'Unlimited AI, Revenue Command Center, visual forecasts, goal milestone tracking, and full Google Sheets export',
 
   },
 
@@ -260,15 +274,31 @@ export const PRO_FEATURE_BY_MODULE: ProFeatureModule[] = [
 
     id: 'competitor',
 
-    name: 'Competitor Intelligence (DreamPulse)',
+    name: 'Competitive Intelligence',
 
     free:
 
-      '2 competitor analyses/month — market scans, positioning, and saved pulse reports',
+      '2 competitor analyses/month — market scans, positioning, and saved analysis reports',
 
     pro:
 
-      'Unlimited DreamPulse deep-dives, competitor tracking, and saved analysis library without monthly caps',
+      'Unlimited competitive deep-dives, competitor tracking, and saved analysis library without monthly caps',
+
+  },
+
+  {
+
+    id: 'venture_quest',
+
+    name: 'Venture Quest — skill path & daily focus',
+
+    free:
+
+      'Sales Mastery branch only, 3 path steps per day, 2 AI task generations per month, 1 active goal, basic streaks',
+
+    pro:
+
+      'All 4 skill branches with auto-expanding path, unlimited milestones, unlimited AI-generated tasks, streak multipliers, multiple goals',
 
   },
 
@@ -298,7 +328,7 @@ export const PRO_FEATURE_BY_MODULE: ProFeatureModule[] = [
 
     pro:
 
-      'Connect Google Calendar & Docs and export to Notion (rolling out — you will see them in Settings when live)',
+      'Connect Google (Docs, Sheets, Calendar), Notion, and Slack in Settings → Integrations',
 
   },
 
@@ -326,7 +356,7 @@ export const FREE_PLAN_LIMITS_SUMMARY = [
 
   'Bizora: 5 messages, then an 8-hour wait before 5 more',
 
-  '2 AI uses per month each for Systems, Revenue, Leadership, Teams & Competitor Intelligence',
+  '2 AI uses per month each for Systems, Revenue, Leadership, Teams, Competitive Intelligence & Venture Quest',
 
   '2 Bizora file uploads per month',
 

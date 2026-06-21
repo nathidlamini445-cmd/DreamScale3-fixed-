@@ -1,45 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Lightbulb, Calendar } from "lucide-react"
+import { type LeadershipAdvice } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
 import { AIResponse } from '@/components/ai-response'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-interface SavedAdvice {
-  id: string
-  problem: string
-  advice: string
-  date: string
-}
 
 export default function LeadershipAdviceDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [advice, setAdvice] = useState<SavedAdvice | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadAdvice = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:problem-solver') : null
-        if (saved) {
-          const adviceList: SavedAdvice[] = JSON.parse(saved)
-          const foundAdvice = adviceList.find((a: SavedAdvice) => a.id === params.id)
-          if (foundAdvice) {
-            setAdvice(foundAdvice)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load advice:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadAdvice()
-  }, [params.id])
+  const { item: advice, loading } = useLeadershipDetail<LeadershipAdvice>(
+    'problemSolverAdvice',
+    params.id
+  )
 
   if (loading) {
     return (

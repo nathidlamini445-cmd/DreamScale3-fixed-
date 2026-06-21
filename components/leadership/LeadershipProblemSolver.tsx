@@ -5,19 +5,23 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertCircle, Trash2, X } from "lucide-react"
+import { Loader2, AlertCircle, Trash2, X, Share } from "lucide-react"
 import { AIResponse } from '@/components/ai-response'
+import { ShareModal } from '@/components/share-modal'
+import { formatLeadershipAdviceForShare } from '@/lib/export/share-content'
+import { type LeadershipAdvice } from '@/lib/leadership-types'
 import { useSessionSafe } from '@/lib/session-context'
 import { useToast } from '@/hooks/use-toast'
 
-interface SavedAdvice {
-  id: string
-  problem: string
-  advice: string
-  date: string
+type LeadershipProblemSolverProps = {
+  savedAdvice: LeadershipAdvice[]
+  onUpdateAdvice: (advice: LeadershipAdvice[]) => void
 }
 
-export default function LeadershipProblemSolver() {
+export default function LeadershipProblemSolver({
+  savedAdvice,
+  onUpdateAdvice,
+}: LeadershipProblemSolverProps) {
   const router = useRouter()
   const pathname = usePathname()
   const sessionContext = useSessionSafe()
@@ -29,9 +33,13 @@ export default function LeadershipProblemSolver() {
   const [liked, setLiked] = useState(false)
   const [disliked, setDisliked] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [savedAdvice, setSavedAdvice] = useState<SavedAdvice[]>([])
-  const [selectedAdvice, setSelectedAdvice] = useState<SavedAdvice | null>(null)
+  const [selectedAdvice, setSelectedAdvice] = useState<LeadershipAdvice | null>(null)
   const [navigatingId, setNavigatingId] = useState<string | null>(null)
+  const [shareModal, setShareModal] = useState<{ isOpen: boolean; content: string; title: string }>({
+    isOpen: false,
+    content: '',
+    title: '',
+  })
 
   // Clear loading state when route changes (navigation completed) or after timeout
   useEffect(() => {
@@ -49,44 +57,22 @@ export default function LeadershipProblemSolver() {
     }
   }, [pathname, navigatingId])
 
-  // Load saved advice from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('leadership:problem-solver')
-      if (saved) {
-        setSavedAdvice(JSON.parse(saved))
-      }
-    } catch (e) {
-      console.warn('Failed to load saved advice', e)
-    }
-  }, [])
-
-  // Save advice to localStorage
+  // Save advice to leadership data (Supabase + localStorage via parent)
   const saveAdvice = (problemText: string, adviceText: string) => {
-    const newAdvice: SavedAdvice = {
+    const newAdvice: LeadershipAdvice = {
       id: Date.now().toString(),
       problem: problemText,
       advice: adviceText,
       date: new Date().toISOString()
     }
     const updated = [newAdvice, ...savedAdvice]
-    setSavedAdvice(updated)
-    try {
-      localStorage.setItem('leadership:problem-solver', JSON.stringify(updated))
-    } catch (e) {
-      console.error('Failed to save advice', e)
-    }
+    onUpdateAdvice(updated)
     setSelectedAdvice(newAdvice)
   }
 
   const deleteAdvice = (id: string) => {
-    const updated = savedAdvice.filter(a => a.id !== id)
-    setSavedAdvice(updated)
-    try {
-      localStorage.setItem('leadership:problem-solver', JSON.stringify(updated))
-    } catch (e) {
-      console.error('Failed to delete advice', e)
-    }
+    const updated = savedAdvice.filter((a) => a.id !== id)
+    onUpdateAdvice(updated)
     if (selectedAdvice?.id === id) {
       setSelectedAdvice(null)
       setAdvice(null)
@@ -266,17 +252,37 @@ export default function LeadershipProblemSolver() {
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-medium text-gray-900 dark:text-white">AI Advice</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedAdvice(null)
-                  setAdvice(null)
-                }}
-                className="border-gray-200/60 dark:border-gray-800/60"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const activeProblem = selectedAdvice?.problem ?? problem
+                    const activeAdvice = selectedAdvice?.advice ?? advice
+                    if (!activeAdvice) return
+                    setShareModal({
+                      isOpen: true,
+                      content: formatLeadershipAdviceForShare(activeProblem, activeAdvice),
+                      title: 'Leadership Advice',
+                    })
+                  }}
+                  className="border-gray-200/60 dark:border-gray-800/60"
+                >
+                  <Share className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedAdvice(null)
+                    setAdvice(null)
+                  }}
+                  className="border-gray-200/60 dark:border-gray-800/60"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             {selectedAdvice && (
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mt-2">
@@ -374,6 +380,13 @@ export default function LeadershipProblemSolver() {
           </div>
         </div>
       )}
+      <ShareModal
+        isOpen={shareModal.isOpen}
+        onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
+        messageContent={shareModal.content}
+        contentType="Leadership · Advice"
+        contentTitle={shareModal.title}
+      />
     </div>
   )
 }

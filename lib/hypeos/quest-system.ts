@@ -189,6 +189,46 @@ export function saveQuestProgress(quests: Quest[]): void {
   localStorage.setItem('hypeos-quests', JSON.stringify(quests));
 }
 
+export function saveQuestProgressForGoal(goalId: string, quests: Quest[]): void {
+  const today = new Date().toDateString();
+  const progress: QuestProgress = {
+    tasksCompleted: 0,
+    xpEarned: 0,
+    streakCount: 0,
+    highImpactTasks: 0,
+    lastResetDate: today,
+  };
+
+  quests.forEach((quest) => {
+    switch (quest.type) {
+      case 'tasks':
+        progress.tasksCompleted = quest.current;
+        break;
+      case 'xp':
+        progress.xpEarned = quest.current;
+        break;
+      case 'streak':
+        progress.streakCount = quest.current;
+        break;
+      case 'performance':
+        progress.highImpactTasks = quest.current;
+        break;
+    }
+  });
+
+  const id = goalId.trim() || 'default';
+  localStorage.setItem(`hypeos-quest-progress-${id}`, JSON.stringify(progress));
+  localStorage.setItem(`hypeos-quests-${id}`, JSON.stringify(quests));
+}
+
+export function freshQuestsForGoal(): Quest[] {
+  return DEFAULT_QUESTS.map((quest) => ({
+    ...quest,
+    current: 0,
+    completed: false,
+  }));
+}
+
 export function getQuestProgress(): QuestProgress {
   const saved = localStorage.getItem('hypeos-quest-progress');
   if (!saved) {

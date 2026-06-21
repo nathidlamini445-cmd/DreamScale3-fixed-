@@ -11,6 +11,7 @@ export type MonthlyUsageBucket =
   | 'leadership'
   | 'teams'
   | 'competitor'
+  | 'venture_quest'
 
 export type FreeUsageRecord = {
   period: string
@@ -24,6 +25,7 @@ export type FreeUsageRecord = {
   leadership: number
   teams: number
   competitor: number
+  venture_quest: number
 }
 
 export type UsageQuotaPublic = {

@@ -249,7 +249,7 @@ export default function RewardsPage() {
               You need to set up your goals before accessing the rewards store.
             </p>
             <button 
-              onClick={() => router.push('/hypeos')}
+              onClick={() => router.push('/venture-quest')}
               className="bg-[#39d2c0] hover:bg-[#39d2c0]/90 text-white px-6 py-2 rounded-lg"
             >
               Go to Venture Quest

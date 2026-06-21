@@ -11,6 +11,11 @@ import { AIResponse } from '@/components/ai-response'
 import { cn } from '@/lib/utils'
 import { useUser } from '@clerk/nextjs'
 import * as supabaseData from '@/lib/supabase-data'
+import { RevenueShareBar } from '@/components/revenue/RevenueShareBar'
+import {
+  formatLtvForShare,
+  formatLtvForSheet,
+} from '@/lib/revenue/format-revenue-export'
 
 export default function LTVDetailPage() {
   const router = useRouter()
@@ -119,19 +124,27 @@ export default function LTVDetailPage() {
               <ArrowLeft className="w-4 h-4" />
               Back
             </Button>
-            <div>
-              <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
-                {analysis.customerSegment} - LTV Analysis
-              </h1>
-              <p className="text-sm text-gray-400 dark:text-gray-500">
-                Analyzed on {new Date(analysis.date).toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric', 
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
+                  {analysis.customerSegment} - LTV Analysis
+                </h1>
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  Analyzed on {new Date(analysis.date).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+              <RevenueShareBar
+                title={`${analysis.customerSegment} LTV`}
+                contentType="Revenue · LTV"
+                textContent={formatLtvForShare(analysis)}
+                sheetExport={formatLtvForSheet(analysis)}
+              />
             </div>
           </div>
         </div>

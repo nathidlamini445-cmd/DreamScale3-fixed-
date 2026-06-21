@@ -339,7 +339,7 @@ export default function ConflictResolutionHelper({ conflicts, onAddConflict, onD
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType="Conflict Resolution"
+        contentType="Leadership · Conflict Resolution"
         contentTitle={shareModal.title}
       />
     </div>

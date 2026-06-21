@@ -11,6 +11,12 @@ import { AIResponse } from '@/components/ai-response'
 import { cn } from '@/lib/utils'
 import { useUser } from '@clerk/nextjs'
 import * as supabaseData from '@/lib/supabase-data'
+import { RevenueShareBar } from '@/components/revenue/RevenueShareBar'
+import { RevenueScenarioChart } from '@/components/revenue/RevenueScenarioChart'
+import {
+  formatScenarioForShare,
+  formatScenarioForSheet,
+} from '@/lib/revenue/format-revenue-export'
 
 export default function ScenarioDetailPage() {
   const router = useRouter()
@@ -113,19 +119,27 @@ export default function ScenarioDetailPage() {
               <ArrowLeft className="w-4 h-4" />
               Back
             </Button>
-            <div>
-              <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
-                {scenario.name}
-              </h1>
-              <p className="text-sm text-gray-400 dark:text-gray-500">
-                Created on {new Date(scenario.date).toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric', 
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-medium text-gray-900 dark:text-white mb-1">
+                  {scenario.name}
+                </h1>
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  Created on {new Date(scenario.date).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+              <RevenueShareBar
+                title={scenario.name}
+                contentType="Revenue · Scenario"
+                textContent={formatScenarioForShare(scenario)}
+                sheetExport={formatScenarioForSheet(scenario)}
+              />
             </div>
           </div>
         </div>
@@ -167,6 +181,9 @@ export default function ScenarioDetailPage() {
             {scenario.projections.length > 0 && (
               <div>
                 <h2 className="text-xl font-medium text-gray-900 dark:text-white mb-8">Revenue Projections</h2>
+                <div className="mb-8 rounded-lg border border-gray-200/60 bg-white p-4 dark:border-gray-800/60 dark:bg-slate-950">
+                  <RevenueScenarioChart data={scenario.projections} />
+                </div>
                 <div className="space-y-6">
                   {scenario.projections.map((projection, i) => (
                     <div key={i} className="bg-white dark:bg-slate-950 border border-gray-200/60 dark:border-gray-800/60 rounded-lg p-6 shadow-[0_1px_3px_0_rgba(0,0,0,0.05)] dark:shadow-[0_1px_3px_0_rgba(0,0,0,0.2)]">

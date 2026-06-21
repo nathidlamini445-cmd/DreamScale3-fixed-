@@ -34,7 +34,8 @@ const MONTHLY_LABELS: Record<MonthlyUsageBucket, string> = {
   revenue: 'Revenue',
   leadership: 'Leadership',
   teams: 'Teams',
-  competitor: 'Competitor Intelligence',
+  competitor: 'Competitive Intelligence',
+  venture_quest: 'Venture Quest',
 }
 
 async function loadOrDeny(userId: string): Promise<

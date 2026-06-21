@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowRight, Loader2 } from "lucide-react"
+import { ArrowRight, Loader2, Sparkles } from "lucide-react"
+import { useSessionSafe } from '@/lib/session-context'
 
 interface SystemGeneratorProps {
   onGenerate: (data: {
@@ -14,23 +15,65 @@ interface SystemGeneratorProps {
     teamSize: number
     stage: 'idea' | 'mvp' | 'scaling'
     templateName?: string
+    additionalInfo?: string
   }) => void
   isGenerating: boolean
 }
 
+const firstString = (value: string | string[] | null | undefined): string | null => {
+  if (Array.isArray(value)) return value.find((v) => typeof v === 'string' && v.trim()) ?? null
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+const stageFromProfile = (value: string | null): 'idea' | 'mvp' | 'scaling' | null => {
+  if (!value) return null
+  const v = value.toLowerCase()
+  if (v.includes('idea') || v.includes('start')) return 'idea'
+  if (v.includes('scal') || v.includes('grow') || v.includes('establish')) return 'scaling'
+  if (v.includes('mvp') || v.includes('launch') || v.includes('early')) return 'mvp'
+  return null
+}
+
 export default function SystemGenerator({ onGenerate, isGenerating }: SystemGeneratorProps) {
+  const sessionContext = useSessionSafe()
   const [businessType, setBusinessType] = useState('')
   const [teamSize, setTeamSize] = useState(1)
   const [stage, setStage] = useState<'idea' | 'mvp' | 'scaling'>('idea')
   const [additionalInfo, setAdditionalInfo] = useState('')
+  const [prefilledFromProfile, setPrefilledFromProfile] = useState(false)
+  const didPrefillRef = useRef(false)
+
+  // Pre-fill from the user's onboarding profile so the generated system is theirs, not generic.
+  useEffect(() => {
+    if (didPrefillRef.current) return
+    const profile = sessionContext?.sessionData?.entrepreneurProfile
+    if (!profile) return
+
+    const industry = firstString(profile.industry)
+    const profileTeamSize = firstString(profile.teamSize)
+    const profileStage = stageFromProfile(firstString(profile.businessStage))
+
+    if (!industry && !profileTeamSize && !profileStage) return
+    didPrefillRef.current = true
+
+    if (industry) setBusinessType(industry)
+    if (profileTeamSize) {
+      const parsed = parseInt(profileTeamSize.replace(/\D/g, ''), 10)
+      if (!Number.isNaN(parsed) && parsed > 0) setTeamSize(Math.min(parsed, 100))
+    }
+    if (profileStage) setStage(profileStage)
+    setPrefilledFromProfile(true)
+  }, [sessionContext?.sessionData?.entrepreneurProfile])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!businessType.trim()) {
-      alert('Please enter a business type')
-      return
-    }
-    onGenerate({ type: businessType, teamSize, stage })
+    if (!businessType.trim()) return
+    onGenerate({
+      type: businessType,
+      teamSize,
+      stage,
+      additionalInfo: additionalInfo.trim() || undefined,
+    })
   }
 
   return (
@@ -42,6 +85,12 @@ export default function SystemGenerator({ onGenerate, isGenerating }: SystemGene
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Tell us about your business and we'll generate a complete operational system tailored to your needs
         </p>
+        {prefilledFromProfile && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg border border-blue-200/70 bg-blue-50/70 px-3 py-2 text-xs text-blue-800 dark:border-blue-800/50 dark:bg-blue-950/30 dark:text-blue-200">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            Pre-filled from your business profile — the generated system will be tailored to your industry, challenges, and goals.
+          </div>
+        )}
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">

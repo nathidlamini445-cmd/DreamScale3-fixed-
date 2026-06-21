@@ -30,11 +30,11 @@ export function UpgradeDropdown() {
         title="Manage or cancel DreamScale Pro"
         className={cn(
           buttonVariants(),
-          'min-w-[140px] inline-flex items-center justify-center gap-2 border-2 border-gray-300 bg-white text-[#005DFF] shadow-sm hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 dark:border-gray-600 dark:hover:border-gray-500'
+          'min-w-[140px] inline-flex items-center justify-center gap-2 border-2 border-gray-300 bg-white text-[#005DFF] shadow-sm hover:bg-gray-50 hover:border-gray-400 transition-all duration-300 dark:bg-slate-800 dark:border-slate-600 dark:text-blue-400 dark:hover:bg-slate-700 dark:hover:border-slate-500 [&_span]:!text-inherit'
         )}
       >
         <ProPlanBadge active />
-        <span className="font-semibold">Subscribed</span>
+        <span className="font-semibold text-[#005DFF] dark:text-blue-400">Subscribed</span>
       </Link>
     )
   }

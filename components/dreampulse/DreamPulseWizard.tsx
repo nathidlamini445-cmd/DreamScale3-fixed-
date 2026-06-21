@@ -39,6 +39,9 @@ import {
 import ReactMarkdown from 'react-markdown'
 import { downloadPDF, printPDF, PDFData } from '@/lib/pdf-generator'
 import CompetitiveIntelligenceDashboard from './CompetitiveIntelligenceDashboard'
+import { parseAnalysisMarkdown } from '@/lib/competitive-intelligence/parse-analysis-markdown'
+import { competitiveReportMarkdownComponents } from '@/lib/competitive-intelligence/report-markdown'
+import { DREAMPULSE_CLIENT_TIMEOUT_MS } from '@/lib/dreampulse/analysis-timeouts'
 import { ShareModal } from '@/components/share-modal'
 
 interface AnalysisSection {
@@ -151,63 +154,7 @@ const VALUE_CREATION_OPTIONS = [
 
 // Helper function to parse markdown into sections
 const parseAnalysisResult = (markdown: string): AnalysisSection[] => {
-  const sections: AnalysisSection[] = []
-  const lines = markdown.split('\n')
-  let currentSectionTitle = ''
-  let currentSectionContent: string[] = []
-
-  // Extract the main report title first, if present, and skip it for section parsing
-  const reportTitleMatch = lines[0]?.match(/^# (.+)/)
-  let startIndex = 0
-  if (reportTitleMatch) {
-    startIndex = 1
-  }
-
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i]
-    if (line.startsWith('## ')) {
-      if (currentSectionTitle) {
-        sections.push({
-          title: currentSectionTitle,
-          content: currentSectionContent.join('\n').trim(),
-        })
-      }
-      currentSectionTitle = line.substring(3).trim() // Remove "## "
-      currentSectionContent = []
-    } else {
-      currentSectionContent.push(line)
-    }
-  }
-
-  // Add the last section
-  if (currentSectionTitle) {
-    sections.push({
-      title: currentSectionTitle,
-      content: currentSectionContent.join('\n').trim(),
-    })
-  }
-
-  return sections
-}
-
-// Helper function to format content for better readability
-const formatContentForReadability = (content: string): string => {
-  return content
-    // Add spacing around bullet points
-    .replace(/^- /gm, '\n• ')
-    .replace(/^\* /gm, '\n• ')
-    // Add spacing around numbered lists
-    .replace(/^(\d+)\. /gm, '\n$1. ')
-    // Add spacing around bold text
-    .replace(/\*\*(.*?)\*\*/g, '\n**$1**\n')
-    // Add spacing around subheadings
-    .replace(/^### (.*)$/gm, '\n### $1\n')
-    .replace(/^#### (.*)$/gm, '\n#### $1\n')
-    // Break long lines to prevent overflow
-    .replace(/(.{80,}?)(\s)/g, '$1\n$2')
-    // Clean up multiple newlines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return parseAnalysisMarkdown(markdown).sections
 }
 
 // Detect platform from URL
@@ -346,7 +293,17 @@ async function getYouTubeData(username: string): Promise<ScrapeResult['preFillDa
   }
 }
 
-export default function DreamPulseWizard() {
+type DreamPulseWizardProps = {
+  analyzeEndpoint?: string
+  analyzeBodyExtras?: Record<string, unknown>
+  savedAnalysesStorageKey?: string
+}
+
+export default function DreamPulseWizard({
+  analyzeEndpoint = '/api/dreampulse/analyze',
+  analyzeBodyExtras,
+  savedAnalysesStorageKey = 'dreamPulseSavedAnalyses',
+}: DreamPulseWizardProps = {}) {
   const { user } = useUser()
   const [currentStep, setCurrentStep] = useState(1)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -356,12 +313,24 @@ export default function DreamPulseWizard() {
   const [viewMode, setViewMode] = useState<'wizard' | 'saved'>('wizard')
   const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [apiStatus, setApiStatus] = useState<'unknown' | 'working' | 'fallback' | 'error'>('unknown')
+  const [apiStatus, setApiStatus] = useState<
+    'unknown' | 'working' | 'enriched' | 'scrape-failed' | 'fallback' | 'error'
+  >('unknown')
+  const [scrapeUrl, setScrapeUrl] = useState<string | null>(null)
   const [reportViewMode, setReportViewMode] = useState<'dashboard' | 'detailed'>('dashboard')
-  const [shareModal, setShareModal] = useState<{isOpen: boolean, content: string, title: string}>({
+  const [shareModal, setShareModal] = useState<{
+    isOpen: boolean
+    content: string
+    title: string
+    competitiveIntelligence?: {
+      subject: string
+      analysisResult: string
+      data?: QuestionnaireData
+    }
+  }>({
     isOpen: false,
     content: '',
-    title: ''
+    title: '',
   })
   
   const [data, setData] = useState<QuestionnaireData>({
@@ -445,7 +414,7 @@ export default function DreamPulseWizard() {
       }
       
       // Fallback to localStorage for unauthenticated users
-      const saved = localStorage.getItem('dreamPulseSavedAnalyses')
+      const saved = localStorage.getItem(savedAnalysesStorageKey)
       if (saved) {
         try {
           const parsed = JSON.parse(saved)
@@ -471,7 +440,7 @@ export default function DreamPulseWizard() {
     return () => {
       window.removeEventListener('dreampulse:viewSaved', handleViewSaved)
     }
-  }, [user?.id])
+  }, [user?.id, savedAnalysesStorageKey])
 
   // Save analysis to localStorage
   const saveAnalysis = async () => {
@@ -524,12 +493,12 @@ export default function DreamPulseWizard() {
       
       // Only save to localStorage for unauthenticated users
       if (!user?.id) {
-        localStorage.setItem('dreamPulseSavedAnalyses', JSON.stringify(updatedAnalyses))
+        localStorage.setItem(savedAnalysesStorageKey, JSON.stringify(updatedAnalyses))
         console.log('✅ Saved DreamPulse analyses to localStorage (unauthenticated)')
         
         // Trigger storage event to update nav bar count
         window.dispatchEvent(new StorageEvent('storage', {
-          key: 'dreamPulseSavedAnalyses',
+          key: savedAnalysesStorageKey,
           newValue: JSON.stringify(updatedAnalyses)
         }))
       }
@@ -579,12 +548,12 @@ export default function DreamPulseWizard() {
     
     // Only save to localStorage for unauthenticated users
     if (!user?.id) {
-      localStorage.setItem('dreamPulseSavedAnalyses', JSON.stringify(updatedAnalyses))
+      localStorage.setItem(savedAnalysesStorageKey, JSON.stringify(updatedAnalyses))
     }
     
     // Trigger storage event to update nav bar count
     window.dispatchEvent(new StorageEvent('storage', {
-      key: 'dreamPulseSavedAnalyses',
+      key: savedAnalysesStorageKey,
       newValue: JSON.stringify(updatedAnalyses)
     }))
     
@@ -694,22 +663,30 @@ export default function DreamPulseWizard() {
     }
   }
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (options?: { retry?: boolean }) => {
     setIsAnalyzing(true)
     setApiStatus('unknown')
-    setAnalysisResult(null) // Clear any previous results
+    setScrapeUrl(null)
+    if (!options?.retry) {
+      setAnalysisResult(null)
+    }
     const startTime = Date.now()
     
     try {
-      // Create AbortController for timeout handling (90 seconds - reduced from 120)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90 second timeout
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        DREAMPULSE_CLIENT_TIMEOUT_MS
+      )
       
       console.log('🚀 Starting analysis request...')
-      const response = await fetch('/api/dreampulse/analyze', {
+      const response = await fetch(analyzeEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          ...(analyzeBodyExtras ?? {}),
+        }),
         signal: controller.signal
       })
       
@@ -730,13 +707,27 @@ export default function DreamPulseWizard() {
         throw new Error(result.error || 'Analysis failed')
       }
       
-      // Check if we got a warning about fallback analysis
-      if (result.warning) {
-        console.log('⚠️ API warning:', result.warning)
+      // Classify API result for status badges
+      const warningKind = result.warningKind as string | undefined
+      if (warningKind === 'enriched' || result.warning?.startsWith('Enriched with live data')) {
+        setApiStatus('enriched')
+        if (result.scrapeUrl) setScrapeUrl(result.scrapeUrl)
+      } else if (warningKind === 'scrape-failed' || result.warning?.includes('Could not read competitor')) {
+        setApiStatus('scrape-failed')
+      } else if (
+        warningKind === 'fallback' ||
+        result.warning?.toLowerCase().includes('fallback') ||
+        result.warning?.includes('API key not configured')
+      ) {
         setApiStatus('fallback')
-      } else {
-        console.log('✅ Analysis successful - using real Gemini API')
+      } else if (result.warning) {
         setApiStatus('working')
+      } else {
+        setApiStatus('working')
+      }
+      
+      if (result.scrapeUrl && !result.warning?.startsWith('Enriched')) {
+        setScrapeUrl(result.scrapeUrl)
       }
       
       // Make sure we have analysis content and convert to string if needed
@@ -756,7 +747,8 @@ export default function DreamPulseWizard() {
       let errorMessage = 'Analysis failed. Please try again.'
       
       if (error.name === 'AbortError') {
-        errorMessage = 'Analysis timed out. The request took too long. Please try again with less data or check your connection.'
+        errorMessage =
+          'Analysis timed out. Scrape + AI can take up to 3 minutes — please try again and keep this tab open.'
         setApiStatus('error')
       } else if (error.message) {
         errorMessage = error.message
@@ -1524,14 +1516,45 @@ export default function DreamPulseWizard() {
     const parsedSections = parseAnalysisResult(analysisResult)
     const reportTitleMatch = analysisResult.match(/^# (.+)/)
     const reportTitle = reportTitleMatch ? reportTitleMatch[1] : 'Competitive Analysis Report'
+    const isAnalysisError =
+      apiStatus === 'error' || reportTitle.toLowerCase().includes('analysis error')
 
     return (
-      <div className="max-w-7xl mx-auto space-y-8" style={{ overflowY: 'auto', minHeight: '100vh' }}>
+      <div className="max-w-7xl mx-auto space-y-8 relative" style={{ overflowY: 'auto', minHeight: '100vh' }}>
+        {isAnalyzing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-8 py-6 shadow-xl text-center max-w-sm mx-4">
+              <Loader2 className="w-10 h-10 animate-spin text-blue-600 mx-auto mb-3" />
+              <p className="font-semibold text-gray-900 dark:text-white">Re-running analysis…</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Scrape + AI can take 1–3 minutes. Keep this tab open.
+              </p>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="text-center space-y-4 mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-900/50 mb-4">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-            <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">Analysis Complete</span>
+          <div
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-4 ${
+              isAnalysisError
+                ? 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/30 border-red-200 dark:border-red-900/50'
+                : 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-900/50'
+            }`}
+          >
+            <div
+              className={`w-2 h-2 rounded-full ${
+                isAnalysisError ? 'bg-red-500' : 'bg-blue-500 animate-pulse'
+              }`}
+            />
+            <span
+              className={`text-sm font-semibold ${
+                isAnalysisError
+                  ? 'text-red-700 dark:text-red-400'
+                  : 'text-blue-700 dark:text-blue-400'
+              }`}
+            >
+              {isAnalysisError ? 'Analysis failed' : 'Analysis complete'}
+            </span>
           </div>
           <h1 className="text-5xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-white dark:via-gray-200 dark:to-white bg-clip-text text-transparent">
             {reportTitle}
@@ -1563,6 +1586,18 @@ export default function DreamPulseWizard() {
           </div>
           
           {/* API Status Indicator */}
+          {apiStatus === 'enriched' && (
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-sm font-medium">
+              <CheckCircle className="w-4 h-4" />
+              Live data from competitor site{scrapeUrl ? ` · ${scrapeUrl.replace(/^https?:\/\//, '')}` : ''}
+            </div>
+          )}
+          {apiStatus === 'scrape-failed' && (
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm font-medium">
+              <AlertCircle className="w-4 h-4" />
+              AI analysis complete — site scrape blocked; add more detail in the wizard for sharper output
+            </div>
+          )}
           {apiStatus === 'fallback' && (
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm font-medium">
               <AlertCircle className="w-4 h-4" />
@@ -1570,9 +1605,29 @@ export default function DreamPulseWizard() {
             </div>
           )}
           {apiStatus === 'error' && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm font-medium">
-              <AlertCircle className="w-4 h-4" />
-              Analysis error
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm font-medium">
+                <AlertCircle className="w-4 h-4" />
+                Analysis error
+              </div>
+              <Button
+                onClick={() => handleAnalyze({ retry: true })}
+                disabled={isAnalyzing}
+                size="sm"
+                className="h-9 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Re-attempting…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Re-attempt analysis
+                  </>
+                )}
+              </Button>
             </div>
           )}
           {apiStatus === 'working' && (
@@ -1606,73 +1661,8 @@ export default function DreamPulseWizard() {
                 </CardHeader>
                 <CardContent className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-white prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300 flex-1 overflow-x-auto overflow-y-auto min-h-0 min-w-0 p-6 px-8">
                   <div>
-                    <ReactMarkdown 
-                      components={{
-                        p: ({ children }) => <p className="mb-4 text-[15px] leading-relaxed whitespace-normal text-gray-700 dark:text-gray-300">{children}</p>,
-                        ul: ({ children }) => {
-                          // Filter out empty list items
-                          const validChildren = React.Children.toArray(children).filter((child: any) => {
-                            if (typeof child === 'string') return child.trim().length > 0
-                            if (child?.props?.children) {
-                              const text = typeof child.props.children === 'string' 
-                                ? child.props.children 
-                                : React.Children.toArray(child.props.children).join('')
-                              return text.trim().length > 0
-                            }
-                            return false
-                          })
-                          if (validChildren.length === 0) return null
-                          // Remove list styling since items will be rendered as headings
-                          return <div className="mb-4 space-y-3">{validChildren}</div>
-                        },
-                        ol: ({ children }) => {
-                          // Filter out empty list items
-                          const validChildren = React.Children.toArray(children).filter((child: any) => {
-                            if (typeof child === 'string') return child.trim().length > 0
-                            if (child?.props?.children) {
-                              const text = typeof child.props.children === 'string' 
-                                ? child.props.children 
-                                : React.Children.toArray(child.props.children).join('')
-                              return text.trim().length > 0
-                            }
-                            return false
-                          })
-                          if (validChildren.length === 0) return null
-                          return <ol className="mb-4 space-y-2 text-[15px] list-decimal list-inside">{validChildren}</ol>
-                        },
-                        li: ({ children }) => {
-                          // Don't render if empty or only whitespace
-                          const text = typeof children === 'string' 
-                            ? children 
-                            : React.Children.toArray(children).join('')
-                          if (!text || text.trim().length === 0) return null
-                          
-                          // Check if this looks like a title (has colon followed by description)
-                          const trimmedText = text.trim()
-                          const hasColon = trimmedText.includes(':')
-                          const parts = hasColon ? trimmedText.split(':') : []
-                          const titlePart = parts[0]?.trim() || ''
-                          const descriptionPart = parts.slice(1).join(':').trim()
-                          
-                          // If it has a colon and the title part is relatively short (likely a title), render as heading
-                          if (hasColon && titlePart.length > 0 && titlePart.length < 100 && descriptionPart.length > 0) {
-                            return (
-                              <div className="mb-3">
-                                <h5 className="text-[15px] font-semibold text-gray-900 dark:text-white mb-2">{titlePart}:</h5>
-                                <p className="text-[15px] leading-relaxed whitespace-normal text-gray-700 dark:text-gray-300 ml-0">{descriptionPart}</p>
-                              </div>
-                            )
-                          }
-                          
-                          // Otherwise render as normal list item
-                          return <li className="text-[15px] leading-relaxed whitespace-normal text-gray-700 dark:text-gray-300">{children}</li>
-                        },
-                        strong: ({ children }) => <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>,
-                        h3: ({ children }) => <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 mt-5 whitespace-normal">{children}</h3>,
-                        h4: ({ children }) => <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-2 mt-4 whitespace-normal">{children}</h4>,
-                      }}
-                    >
-                      {formatContentForReadability(section.content)}
+                    <ReactMarkdown components={competitiveReportMarkdownComponents}>
+                      {section.content}
                     </ReactMarkdown>
                   </div>
                 </CardContent>
@@ -1702,6 +1692,28 @@ export default function DreamPulseWizard() {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap justify-center gap-4 mt-12 pt-8 border-t border-gray-200 dark:border-slate-800">
+          {isAnalysisError && (
+            <Button
+              onClick={() => handleAnalyze({ retry: true })}
+              disabled={isAnalyzing}
+              size="lg"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-6 font-semibold shadow-lg shadow-blue-500/20"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Re-attempting… (1–3 min)
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-5 h-5" />
+                  Re-attempt analysis
+                </>
+              )}
+            </Button>
+          )}
+          {!isAnalysisError && (
+          <>
           <Button 
             onClick={async () => {
               const pdfData: PDFData = {
@@ -1763,7 +1775,12 @@ export default function DreamPulseWizard() {
               setShareModal({
                 isOpen: true,
                 content: analysisResult,
-                title: `Competitor Analysis - ${data.intrapreneurName}`
+                title: `Competitor Analysis - ${data.intrapreneurName}`,
+                competitiveIntelligence: {
+                  subject: data.intrapreneurName,
+                  analysisResult,
+                  data,
+                },
               })
             }}
             variant="outline"
@@ -1807,6 +1824,8 @@ export default function DreamPulseWizard() {
               </>
             )}
           </Button>
+          </>
+          )}
           <Button 
             onClick={() => {
               setAnalysisResult(null)
@@ -2147,76 +2166,11 @@ export default function DreamPulseWizard() {
                                 <span className="break-words">{section.title}</span>
                               </CardTitle>
                             </CardHeader>
-                            <CardContent className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-strong:text-gray-900 dark:prose-strong:text-white prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300 flex-1 overflow-x-auto overflow-y-auto min-h-0 min-w-0 p-6 px-8">
+                            <CardContent className="prose prose-sm max-w-none dark:prose-invert flex-1 overflow-x-auto overflow-y-auto min-h-0 min-w-0 p-6 px-8">
                               <div>
-                                <ReactMarkdown 
-                                  components={{
-                                    p: ({ children }) => <p className="mb-2 text-sm leading-relaxed whitespace-normal text-gray-700 dark:text-gray-300">{children}</p>,
-                                    ul: ({ children }) => {
-                                      // Filter out empty list items
-                                      const validChildren = React.Children.toArray(children).filter((child: any) => {
-                                        if (typeof child === 'string') return child.trim().length > 0
-                                        if (child?.props?.children) {
-                                          const text = typeof child.props.children === 'string' 
-                                            ? child.props.children 
-                                            : React.Children.toArray(child.props.children).join('')
-                                          return text.trim().length > 0
-                                        }
-                                        return false
-                                      })
-                          if (validChildren.length === 0) return null
-                          // Remove list styling since items will be rendered as headings
-                          return <div className="mb-2 space-y-2">{validChildren}</div>
-                        },
-                                    ol: ({ children }) => {
-                                      // Filter out empty list items
-                                      const validChildren = React.Children.toArray(children).filter((child: any) => {
-                                        if (typeof child === 'string') return child.trim().length > 0
-                                        if (child?.props?.children) {
-                                          const text = typeof child.props.children === 'string' 
-                                            ? child.props.children 
-                                            : React.Children.toArray(child.props.children).join('')
-                                          return text.trim().length > 0
-                                        }
-                                        return false
-                                      })
-                          if (validChildren.length === 0) return null
-                          return <ol className="mb-2 space-y-1 text-sm list-decimal list-inside">{validChildren}</ol>
-                        },
-                        li: ({ children }) => {
-                          // Don't render if empty or only whitespace
-                          const text = typeof children === 'string' 
-                            ? children 
-                            : React.Children.toArray(children).join('')
-                          if (!text || text.trim().length === 0) return null
-                          
-                          // Check if this looks like a title (has colon followed by description)
-                          const trimmedText = text.trim()
-                          const hasColon = trimmedText.includes(':')
-                          const parts = hasColon ? trimmedText.split(':') : []
-                          const titlePart = parts[0]?.trim() || ''
-                          const descriptionPart = parts.slice(1).join(':').trim()
-                          
-                          // If it has a colon and the title part is relatively short (likely a title), render as heading
-                          if (hasColon && titlePart.length > 0 && titlePart.length < 100 && descriptionPart.length > 0) {
-                            return (
-                              <div className="mb-2">
-                                <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-1.5">{titlePart}:</h5>
-                                <p className="text-sm leading-relaxed whitespace-normal text-gray-700 dark:text-gray-300 ml-0">{descriptionPart}</p>
-                              </div>
-                            )
-                          }
-                          
-                          // Otherwise render as normal list item
-                          return <li className="text-sm leading-relaxed whitespace-normal text-gray-700 dark:text-gray-300">{children}</li>
-                        },
-                        strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-white">{children}</strong>,
-                        h3: ({ children }) => <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 mt-3 whitespace-normal">{children}</h3>,
-                        h4: ({ children }) => <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1.5 mt-2 whitespace-normal">{children}</h4>,
-                      }}
-                    >
-                      {formatContentForReadability(section.content)}
-                    </ReactMarkdown>
+                                <ReactMarkdown components={competitiveReportMarkdownComponents}>
+                                  {section.content}
+                                </ReactMarkdown>
                               </div>
                             </CardContent>
                           </Card>
@@ -2288,7 +2242,7 @@ export default function DreamPulseWizard() {
             {isAnalyzing ? (
               <>
                 <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                Analyzing...
+                Analyzing… (1–3 min)
               </>
             ) : (
               <>
@@ -2315,8 +2269,9 @@ export default function DreamPulseWizard() {
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType="Competitor Analysis"
+        contentType="Competitive Intelligence"
         contentTitle={shareModal.title}
+        competitiveIntelligence={shareModal.competitiveIntelligence}
       />
     </div>
   )

@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
 import { RevenueGoal } from '@/lib/revenue-types'
+import { goalProgressPercent } from '@/lib/revenue/goal-utils'
+import { linkRevenueGoalToVentureQuest } from '@/lib/revenue/venture-quest-bridge'
+import { buildGoalId } from '@/lib/hypeos/goal-storage'
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { AIResponse } from '@/components/ai-response'
@@ -17,9 +20,17 @@ interface RevenueGoalTrackerProps {
   goals: RevenueGoal[]
   onAddGoal: (goal: RevenueGoal) => void
   onUpdateGoal: (goal: RevenueGoal) => void
+  ventureGoalTitle?: string
+  ventureCategory?: string
 }
 
-export default function RevenueGoalTracker({ goals, onAddGoal, onUpdateGoal }: RevenueGoalTrackerProps) {
+export default function RevenueGoalTracker({
+  goals,
+  onAddGoal,
+  onUpdateGoal,
+  ventureGoalTitle,
+  ventureCategory = 'revenue',
+}: RevenueGoalTrackerProps) {
   const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
   const [formData, setFormData] = useState({
@@ -75,10 +86,6 @@ export default function RevenueGoalTracker({ goals, onAddGoal, onUpdateGoal }: R
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount)
-  }
-
-  const progressPercentage = (goal: RevenueGoal) => {
-    return Math.min((goal.currentProgress / goal.target) * 100, 100)
   }
 
   return (
@@ -210,12 +217,12 @@ export default function RevenueGoalTracker({ goals, onAddGoal, onUpdateGoal }: R
                       </Badge>
                       <Badge variant="outline" className={cn(
                         "text-xs font-medium border-gray-200/60 dark:border-gray-800/60",
-                        progressPercentage(goal) >= 100 && "bg-transparent text-green-600 dark:text-green-400",
-                        progressPercentage(goal) >= 75 && progressPercentage(goal) < 100 && "bg-transparent text-blue-600 dark:text-blue-400",
-                        progressPercentage(goal) >= 50 && progressPercentage(goal) < 75 && "bg-transparent text-yellow-600 dark:text-yellow-400",
-                        progressPercentage(goal) < 50 && "bg-transparent text-red-600 dark:text-red-400"
+                        goalProgressPercent(goal) >= 100 && "bg-transparent text-green-600 dark:text-green-400",
+                        goalProgressPercent(goal) >= 75 && goalProgressPercent(goal) < 100 && "bg-transparent text-blue-600 dark:text-blue-400",
+                        goalProgressPercent(goal) >= 50 && goalProgressPercent(goal) < 75 && "bg-transparent text-yellow-600 dark:text-yellow-400",
+                        goalProgressPercent(goal) < 50 && "bg-transparent text-red-600 dark:text-red-400"
                       )}>
-                        {progressPercentage(goal).toFixed(1)}% Complete
+                        {goalProgressPercent(goal).toFixed(1)}% Complete
                       </Badge>
                     </div>
                     <div className="space-y-2 mb-4">
@@ -225,7 +232,7 @@ export default function RevenueGoalTracker({ goals, onAddGoal, onUpdateGoal }: R
                           {formatCurrency(goal.currentProgress)} / {formatCurrency(goal.target)}
                         </span>
                       </div>
-                      <Progress value={progressPercentage(goal)} className="h-2" />
+                      <Progress value={goalProgressPercent(goal)} className="h-2" />
                     </div>
                     {goal.milestones.length > 0 && (
                       <div className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -233,17 +240,40 @@ export default function RevenueGoalTracker({ goals, onAddGoal, onUpdateGoal }: R
                       </div>
                     )}
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      router.push(`/revenue-intelligence/goal/${goal.id}`)
-                    }}
-                    className="ml-4 border-gray-200/60 dark:border-gray-800/60 font-medium"
-                  >
-                    View
-                  </Button>
+                  <div className="flex flex-col gap-2 ml-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/revenue-intelligence/goal/${goal.id}`)
+                      }}
+                      className="border-gray-200/60 dark:border-gray-800/60 font-medium"
+                    >
+                      View
+                    </Button>
+                    {ventureGoalTitle && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const sync = linkRevenueGoalToVentureQuest({
+                            revenueGoal: goal,
+                            ventureGoalTitle,
+                            ventureCategory,
+                          })
+                          onUpdateGoal({
+                            ...goal,
+                            ventureQuestGoalId: sync.ventureGoalId,
+                          })
+                          router.push('/venture-quest')
+                        }}
+                        className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-medium"
+                      >
+                        Venture Quest
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

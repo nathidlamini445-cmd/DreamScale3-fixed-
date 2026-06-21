@@ -7,7 +7,11 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', 'recharts', 'framer-motion'],
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
+    // Windows + paths with spaces can break filesystem pack cache and cause CSS 404s in dev.
+    if (dev) {
+      config.cache = { type: 'memory' }
+    }
     if (!isServer) {
       config.output = {
         ...config.output,
@@ -56,6 +60,36 @@ const nextConfig = {
   onDemandEntries: {
     maxInactiveAge: 5 * 60 * 1000,
     pagesBufferLength: 10,
+  },
+  async redirects() {
+    return [
+      {
+        source: '/hypeos',
+        destination: '/venture-quest',
+        permanent: true,
+      },
+      {
+        source: '/hypeos/:path*',
+        destination: '/venture-quest/:path*',
+        permanent: true,
+      },
+      {
+        source: '/revenue',
+        destination: '/revenue-intelligence',
+        permanent: false,
+      },
+      {
+        source: '/revenue-intelligence',
+        has: [{ type: 'query', key: 'tab', value: 'systems' }],
+        destination: '/systems',
+        permanent: false,
+      },
+      {
+        source: '/revenue/:id',
+        destination: '/systems/:id',
+        permanent: false,
+      },
+    ]
   },
 }
 

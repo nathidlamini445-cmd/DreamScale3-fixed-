@@ -13,13 +13,13 @@ import { ProPlanBadge } from "@/components/pro-plan-badge"
 const navigationItems = [
   { icon: Home, label: "Home", href: "/dashboard", animation: "animate-gentle-pulse", aiPowered: false, hasNotification: false },
   { icon: Zap, label: "Discover", href: "/discover", animation: "animate-smooth-bounce", aiPowered: false, hasNotification: false },
-  { icon: Cpu, label: "Venture Quest", href: "/hypeos", animation: "animate-glow-pulse", aiPowered: true, hasNotification: false },
+  { icon: Cpu, label: "Venture Quest", href: "/venture-quest", animation: "animate-glow-pulse", aiPowered: true, hasNotification: false },
   { icon: Atom, label: "Bizora AI", href: "/bizora", animation: "animate-slow-spin", aiPowered: true, hasNotification: false },
   { icon: GraduationCap, label: "SkillDrops", href: "/skilldrops", animation: "animate-smooth-bounce", aiPowered: false, hasNotification: false },
   { icon: Target, label: "FlowMatch", href: "/flowmatch", animation: "animate-gentle-pulse", aiPowered: true, hasNotification: false },
   { icon: TrendingUp, label: "PitchPoint", href: "/marketplace", animation: "animate-float", aiPowered: true, hasNotification: false },
-  { icon: Search, label: "Competitor Intelligence Dashboard", href: "/dreampulse", animation: "animate-float", aiPowered: true, hasNotification: false },
-  { icon: Settings, label: "Systems", href: "/revenue", animation: "animate-gentle-pulse", aiPowered: true, hasNotification: false },
+  { icon: Search, label: "Competitive Intelligence", href: "/dreampulse", animation: "animate-float", aiPowered: true, hasNotification: false },
+  { icon: Settings, label: "Systems", href: "/systems", animation: "animate-gentle-pulse", aiPowered: true, hasNotification: false },
   { icon: Users, label: "Teams", href: "/teams", animation: "animate-smooth-bounce", aiPowered: true, hasNotification: false },
 ]
 
@@ -36,7 +36,7 @@ function getIconColor(label: string): string {
     case "PitchPoint": return "#22c55e" // Green
     case "Publishing": return "#eab308" // Yellow
     case "Settings": return "#6b7280" // Dark gray
-    case "Competitor Intelligence Dashboard": return "#2563eb" // Blue
+    case "Competitive Intelligence": return "#2563eb" // Blue
     case "Systems": return "#39d2c0" // Teal
     case "Teams": return "#2563eb" // Blue
     default: return "#2563eb" // Default blue
@@ -150,7 +150,7 @@ export function HorizontalNav() {
             const isActive = item.href === "/dashboard" 
               ? pathname === "/" || pathname === "/dashboard"
               : pathname === item.href || pathname.startsWith(item.href + "/")
-            const isDreamPulse = item.label === "Competitor Intelligence Dashboard"
+            const isDreamPulse = item.label === "Competitive Intelligence"
             
             return (
               <div key={index} className="flex items-center gap-1">

@@ -10,6 +10,7 @@ import { RevenueOptimization } from '@/lib/revenue-types'
 import { Badge } from "@/components/ui/badge"
 import { AIResponse } from '@/components/ai-response'
 import { ShareModal } from '@/components/share-modal'
+import { formatOptimizationForShare, formatOptimizationForSheet } from '@/lib/revenue/format-revenue-export'
 
 interface RevenueOptimizationProps {
   optimizations: RevenueOptimization[]
@@ -21,10 +22,15 @@ export default function RevenueOptimization({ optimizations, onAddOptimization }
   const router = useRouter()
   const pathname = usePathname()
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [shareModal, setShareModal] = useState<{isOpen: boolean, content: string, title: string}>({
+  const [shareModal, setShareModal] = useState<{
+    isOpen: boolean
+    content: string
+    title: string
+    sheetExport?: ReturnType<typeof formatOptimizationForSheet>
+  }>({
     isOpen: false,
     content: '',
-    title: ''
+    title: '',
   })
 
   // Clear loading state when route changes (navigation completed) or after timeout
@@ -202,28 +208,11 @@ export default function RevenueOptimization({ optimizations, onAddOptimization }
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation()
-                          // Format optimization for sharing
-                          let content = `# Revenue Optimization Analysis\n\n`
-                          content += `## Pricing Changes\n\n`
-                          optimization.analysis.pricingChanges.forEach(change => {
-                            content += `- ${change}\n`
-                          })
-                          content += `\n## New Revenue Streams\n\n`
-                          optimization.analysis.newRevenueStreams.forEach(stream => {
-                            content += `- ${stream}\n`
-                          })
-                          content += `\n## Upsell Opportunities\n\n`
-                          optimization.analysis.upsellOpportunities.forEach(opp => {
-                            content += `- ${opp}\n`
-                          })
-                          content += `\n## Cost Reductions\n\n`
-                          optimization.analysis.costReductions.forEach(reduction => {
-                            content += `- ${reduction}\n`
-                          })
                           setShareModal({
                             isOpen: true,
-                            content,
-                            title: 'Revenue Optimization Analysis'
+                            content: formatOptimizationForShare(optimization),
+                            title: 'Revenue Optimization Analysis',
+                            sheetExport: formatOptimizationForSheet(optimization),
                           })
                         }}
                         className="border-gray-200/60 dark:border-gray-800/60"
@@ -264,8 +253,9 @@ export default function RevenueOptimization({ optimizations, onAddOptimization }
         isOpen={shareModal.isOpen}
         onClose={() => setShareModal({ isOpen: false, content: '', title: '' })}
         messageContent={shareModal.content}
-        contentType="Revenue Optimization"
+        contentType="Revenue · Optimization"
         contentTitle={shareModal.title}
+        revenueOsSheets={shareModal.sheetExport}
       />
     </div>
   )

@@ -33,7 +33,7 @@ export default function TaskDetailPage() {
       try {
         const sessionData = sessionContext?.sessionData
         if (!sessionData?.hypeos) {
-          router.push('/hypeos')
+          router.push('/venture-quest')
           return
         }
 
@@ -55,11 +55,11 @@ export default function TaskDetailPage() {
           setTask(foundTask)
         } else {
           // Task not found, redirect back
-          router.push('/hypeos')
+          router.push('/venture-quest')
         }
       } catch (e) {
         console.error('Failed to load task:', e)
-        router.push('/hypeos')
+        router.push('/venture-quest')
       } finally {
         setLoading(false)
       }
@@ -87,7 +87,7 @@ export default function TaskDetailPage() {
       })
       
       // Navigate back - the parent page will handle completion logic
-      router.push('/hypeos')
+      router.push('/venture-quest')
     }
   }
 
@@ -115,7 +115,7 @@ export default function TaskDetailPage() {
             <div className="flex flex-col items-center justify-center h-64">
               <p className="text-gray-600 dark:text-gray-400 mb-4">Task not found</p>
               <button 
-                onClick={() => router.push('/hypeos')}
+                onClick={() => router.push('/venture-quest')}
                 className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -147,7 +147,7 @@ export default function TaskDetailPage() {
           {/* Header */}
           <div className="mb-6">
             <button
-              onClick={() => router.push('/hypeos')}
+              onClick={() => router.push('/venture-quest')}
               className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

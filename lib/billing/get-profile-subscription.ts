@@ -20,7 +20,7 @@ export async function getProfileSubscriptionForUser(
   const supabase = createClient(url.trim(), serviceKey.trim())
   const { data } = await supabase
     .from('user_profiles')
-    .select('subscription_tier, subscription_status')
+    .select('subscription_tier, subscription_status, subscription_ends_at, subscription_activated_at')
     .eq('id', userId)
     .maybeSingle()
 

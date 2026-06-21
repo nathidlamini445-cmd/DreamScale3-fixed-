@@ -25,7 +25,11 @@ import { LeadershipData, INITIAL_LEADERSHIP_DATA } from '@/lib/leadership-types'
 import { useUser } from '@clerk/nextjs'
 import { useSubscriptionStatus } from '@/hooks/use-subscription-status'
 import { ProPlanBadge } from '@/components/pro-plan-badge'
-import * as supabaseData from '@/lib/supabase-data'
+import {
+  loadLeadershipDataLocal,
+  normalizeLeadershipData,
+  saveLeadershipDataLocal,
+} from '@/lib/leadership/persist-leadership'
 
 export default function LeadershipPage() {
   const { user } = useUser()
@@ -41,40 +45,24 @@ export default function LeadershipPage() {
     
     const loadData = async () => {
       try {
-        // Try Supabase first if authenticated
-        if (user?.id) {
-          const dbData = await supabaseData.loadLeadershipData(user.id)
-          if (dbData) {
-            setLeadershipData(dbData as LeadershipData)
-            hasLoadedRef.current = true
-            lastSavedRef.current = JSON.stringify({
-              styleAssessment: dbData.styleAssessment?.completed || false,
-              decisionsCount: dbData.decisions?.length || 0,
-              communicationsCount: dbData.communications?.length || 0,
-              conflictsCount: dbData.conflicts?.length || 0,
-              routinesCount: dbData.routines?.length || 0,
-              challengesCount: dbData.challenges?.length || 0,
-              feedbackCount: dbData.feedback360?.length || 0
-            })
-            console.log('✅ Loaded leadership data from Supabase')
-            return
-          }
-        }
-
-        // Fallback to localStorage
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          setLeadershipData(parsed)
-          hasLoadedRef.current = true
-          console.log('✅ Loaded leadership data from localStorage')
-          return
-        }
+        const data = await loadLeadershipDataLocal(user?.id)
+        setLeadershipData(normalizeLeadershipData(data))
+        hasLoadedRef.current = true
+        lastSavedRef.current = JSON.stringify({
+          styleAssessment: data.styleAssessment?.completed || false,
+          decisionsCount: data.decisions?.length || 0,
+          communicationsCount: data.communications?.length || 0,
+          conflictsCount: data.conflicts?.length || 0,
+          routinesCount: data.routines?.length || 0,
+          challengesCount: data.challenges?.length || 0,
+          feedbackCount: data.feedback360?.length || 0,
+          adviceCount: data.problemSolverAdvice?.length || 0,
+        })
+        console.log('✅ Loaded leadership data')
       } catch (e) {
         console.warn('Failed to load leadership data:', e)
+        hasLoadedRef.current = true
       }
-      
-      hasLoadedRef.current = true
     }
 
     loadData()
@@ -91,31 +79,17 @@ export default function LeadershipPage() {
       conflictsCount: leadershipData.conflicts.length,
       routinesCount: leadershipData.routines.length,
       challengesCount: leadershipData.challenges.length,
-      feedbackCount: leadershipData.feedback360.length
+      feedbackCount: leadershipData.feedback360.length,
+      adviceCount: leadershipData.problemSolverAdvice.length,
     })
     
     if (dataString === lastSavedRef.current) return
     
     const saveData = async () => {
       try {
-        // Save to Supabase if authenticated
-        if (user?.id) {
-          try {
-            await supabaseData.saveLeadershipData(user.id, leadershipData)
-            console.log('✅ Saved leadership data to Supabase')
-          } catch (supabaseError) {
-            console.error('Error saving to Supabase, falling back to localStorage:', supabaseError)
-          }
-        }
-
-        // Only save to localStorage for unauthenticated users
-        if (!user?.id && typeof window !== 'undefined') {
-          localStorage.setItem('leadership:data', JSON.stringify(leadershipData))
-          lastSavedRef.current = dataString
-          console.log('✅ Saved leadership data to localStorage (unauthenticated)')
-        } else {
-          lastSavedRef.current = dataString
-        }
+        await saveLeadershipDataLocal(user?.id, leadershipData)
+        lastSavedRef.current = dataString
+        console.log('✅ Saved leadership data')
       } catch (e) {
         console.error('❌ Failed to save leadership data:', e)
       }
@@ -317,7 +291,12 @@ export default function LeadershipPage() {
               </TabsContent>
 
               <TabsContent value="problem-solver" className="mt-6">
-                <LeadershipProblemSolver />
+                <LeadershipProblemSolver
+                  savedAdvice={leadershipData.problemSolverAdvice}
+                  onUpdateAdvice={(problemSolverAdvice) =>
+                    updateLeadershipData({ problemSolverAdvice })
+                  }
+                />
               </TabsContent>
             </Tabs>
           </div>

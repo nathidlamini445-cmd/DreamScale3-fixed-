@@ -461,7 +461,7 @@ export default function VentureQuestPanel({ onClose }: VentureQuestPanelProps) {
 
       {/* Action Buttons */}
       <div className="flex gap-4 pt-2">
-        <Link href="/hypeos" className="flex-1">
+        <Link href="/venture-quest" className="flex-1">
           <Button variant="outline" className="w-full h-11 text-base">
             Go to Full Dashboard
             <ArrowRight className="w-5 h-5 ml-2" />

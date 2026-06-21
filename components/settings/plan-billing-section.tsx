@@ -21,6 +21,7 @@ import { useUser } from '@clerk/nextjs'
 import { Loader2 } from 'lucide-react'
 
 import { MONTHLY_FEATURE_LIMIT } from '@/lib/usage-quota/types'
+import { formatSubscriptionEndDate } from '@/lib/subscription'
 
 
 
@@ -28,7 +29,7 @@ export function PlanBillingSection() {
 
   const { user } = useUser()
 
-  const { isPro, loading, subscription_status, subscription_tier } =
+  const { isPro, loading, subscription_status, subscription_tier, subscription_ends_at } =
     useSubscriptionStatus()
 
   const { usage } = useUsageQuota()
@@ -77,20 +78,21 @@ export function PlanBillingSection() {
 
 
 
+  const periodEndLabel = formatSubscriptionEndDate(subscription_ends_at)
+  const isPendingCancel = subscription_status === 'cancel_at_period_end'
+  const statusLabel = isPendingCancel
+    ? periodEndLabel
+      ? `Pro until ${periodEndLabel}`
+      : 'Pro until period ends'
+    : (subscription_status ?? 'inactive')
+
   if (loading) {
-
     return (
-
       <div className="flex items-center gap-2 text-sm text-gray-500 py-8">
-
         <Loader2 className="w-4 h-4 animate-spin" />
-
         Loading plan…
-
       </div>
-
     )
-
   }
 
 
@@ -143,7 +145,7 @@ export function PlanBillingSection() {
 
             <p className="text-xs text-gray-500 mt-0.5 capitalize">
 
-              {subscription_status ?? 'inactive'} · {subscription_tier ?? 'free'}
+              {statusLabel} · {subscription_tier ?? 'free'}
 
             </p>
 

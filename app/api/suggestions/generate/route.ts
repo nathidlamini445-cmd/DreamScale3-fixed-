@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { RECOMMENDATION_TEMPLATES, getNextStage, type RecommendationTemplate } from '@/lib/recommendation-templates'
 
+const ROADMAP_RECOMMENDATION_COUNT = 5
+
 // Increase timeout for this API route (Next.js 13+)
-// Note: For Vercel deployments, Pro plan allows up to 300 seconds, Hobby plan is limited to 60 seconds
-export const maxDuration = 60 // 60 seconds - optimized for faster generation
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,9 +21,8 @@ export async function POST(request: NextRequest) {
 
     // Initialize Google Generative AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const modelName = process.env.GEMINI_MODEL || 'gemini-pro'
-    // Reduced max tokens - shorter output needed
-    const maxTokens = parseInt(process.env.GEMINI_MAX_TOKENS || '2000')
+    const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+    const maxTokens = parseInt(process.env.GEMINI_MAX_TOKENS || '3000')
     const temperature = parseFloat(process.env.GEMINI_TEMPERATURE || '0.8')
 
     // Extract onboarding data comprehensively
@@ -65,26 +65,27 @@ export async function POST(request: NextRequest) {
       : onboardingData?.keyMetrics
     const name = onboardingData?.name || ''
 
-    // STEP 1: Select exactly 3 relevant templates (FAST - no AI needed)
+    // STEP 1: Select roadmap templates (FAST — no AI)
     let selectedTemplates: RecommendationTemplate[]
     try {
       selectedTemplates = selectRelevantTemplates(onboardingData, requestDifferent)
       if (!selectedTemplates || selectedTemplates.length === 0) {
-        console.error('No templates selected - using fallback')
-        selectedTemplates = RECOMMENDATION_TEMPLATES.slice(0, 3)
+        selectedTemplates = RECOMMENDATION_TEMPLATES.slice(0, ROADMAP_RECOMMENDATION_COUNT)
       }
-      // Ensure we have exactly 3 templates
-      if (selectedTemplates.length < 3) {
-        const remaining = RECOMMENDATION_TEMPLATES
-          .filter(t => !selectedTemplates.some(st => st.id === t.id))
-          .slice(0, 3 - selectedTemplates.length)
+      if (selectedTemplates.length < ROADMAP_RECOMMENDATION_COUNT) {
+        const remaining = RECOMMENDATION_TEMPLATES.filter(
+          (t) => !selectedTemplates.some((st) => st.id === t.id)
+        ).slice(0, ROADMAP_RECOMMENDATION_COUNT - selectedTemplates.length)
         selectedTemplates = [...selectedTemplates, ...remaining]
       }
-      selectedTemplates = selectedTemplates.slice(0, 3) // Ensure max 3
-      console.log(`✅ Selected exactly ${selectedTemplates.length} templates:`, selectedTemplates.map(t => t.id))
+      selectedTemplates = selectedTemplates.slice(0, ROADMAP_RECOMMENDATION_COUNT)
+      console.log(
+        `✅ Selected ${selectedTemplates.length} templates:`,
+        selectedTemplates.map((t) => t.id)
+      )
     } catch (error) {
       console.error('Error selecting templates:', error)
-      selectedTemplates = RECOMMENDATION_TEMPLATES.slice(0, 3)
+      selectedTemplates = RECOMMENDATION_TEMPLATES.slice(0, ROADMAP_RECOMMENDATION_COUNT)
     }
 
     const model = genAI.getGenerativeModel({ 
@@ -134,107 +135,96 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // STEP 2: Personalize each template SEQUENTIALLY with shorter prompts
-    console.log('🔄 Starting sequential AI personalization for exactly 3 recommendations...')
+    // STEP 2: Personalize templates in parallel (faster with gemini-2.5-flash)
+    console.log(`🔄 Personalizing ${selectedTemplates.length} roadmap items in parallel...`)
     const startTime = Date.now()
-    const personalizedRecommendations = []
+    const challengesText =
+      challenges.length > 0 ? challenges.join(', ') : 'their business challenges'
 
-    for (let i = 0; i < selectedTemplates.length; i++) {
-      const template = selectedTemplates[i]
+    const personalizeTemplate = async (template: RecommendationTemplate, index: number) => {
       try {
-        console.log(`🔄 Personalizing template ${i + 1}/3: ${template.id}`)
-        const templateStartTime = Date.now()
-        
-        // Focused prompt that emphasizes user's challenges
-        const challengesText = challenges.length > 0 
-          ? challenges.join(', ') 
-          : 'their business challenges'
-        
         const prompt = `You are a business advisor helping ${businessName}, an ${industry || 'early-stage'} business at the ${businessStage || 'early'} stage.
 
-Their MAIN CHALLENGES are: ${challengesText}
-Their goal: ${revenueGoal || 'growing their business'}
+Their MAIN CHALLENGES: ${challengesText}
+Their goal: ${revenueGoal || biggestGoal || 'growing their business'}
+Team size: ${teamSize || 'unknown'}
 
-Create a personalized recommendation based on this template:
-Title: "${template.baseTitle}"
+Create roadmap milestone ${index + 1} of ${ROADMAP_RECOMMENDATION_COUNT} based on:
+Title template: "${template.baseTitle}"
 Category: ${template.category}
+DreamScale feature: ${template.feature} (${template.featureLink})
 
-IMPORTANT: Focus on solving their specific challenges: ${challengesText}
+Focus on solving: ${challengesText}. Steps must be specific, actionable, and mention ${template.feature} where relevant.
 
-Return ONLY valid JSON (no markdown, no code blocks):
+Return ONLY valid JSON:
 {
-  "title": "Personalized title that mentions ${businessName} and addresses: ${challengesText}",
-  "description": "1-2 sentences explaining why this recommendation directly addresses their challenges: ${challengesText}",
-  "explanation": "3-4 sentences explaining how this helps ${businessName} solve: ${challengesText}. Be specific about their ${industry || 'industry'} and ${businessStage || 'stage'}.",
-  "whyItMatters": "2-3 sentences on why solving ${challengesText} matters for ${businessName}'s success",
-  "howToStart": ["Step 1: Specific action for ${businessName}", "Step 2: Next action", "Step 3: Final action", "Step 4: Additional step"]
-}
-
-Return ONLY the JSON object, nothing else.`
+  "title": "Personalized title for ${businessName}",
+  "description": "1-2 sentences",
+  "explanation": "3-5 sentences tailored to ${industry || 'their industry'}",
+  "whyItMatters": "2-3 sentences",
+  "howToStart": ["Step 1...", "Step 2...", "Step 3...", "Step 4...", "Step 5..."]
+}`
 
         const result = await Promise.race([
           model.generateContent(prompt),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Template timeout')), 20000) // 20 seconds per template
-          )
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Template timeout')), 25000)
+          ),
         ])
 
-        const text = result.response.text()
-        // Clean up JSON - remove markdown code blocks if present
-        let cleanedText = text.trim()
+        let cleanedText = result.response.text().trim()
         if (cleanedText.startsWith('```')) {
           cleanedText = cleanedText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
         }
-        // Remove any leading/trailing whitespace or newlines
-        cleanedText = cleanedText.replace(/^[\s\n]*/, '').replace(/[\s\n]*$/, '')
-        
         const personalized = JSON.parse(cleanedText)
-        
-        personalizedRecommendations.push({
+
+        return {
           id: template.id,
           title: personalized.title || template.baseTitle,
-          description: personalized.description || `This recommendation helps ${businessName} address their challenges.`,
-          explanation: personalized.explanation || `This is a strategic recommendation for ${businessName} in ${industry || 'their industry'}.`,
-          whyItMatters: personalized.whyItMatters || `This matters for ${businessName} because it addresses their specific challenges.`,
-          howToStart: Array.isArray(personalized.howToStart) && personalized.howToStart.length > 0 
-            ? personalized.howToStart 
-            : ['Step 1: Get started', 'Step 2: Implement', 'Step 3: Review'],
+          description:
+            personalized.description ||
+            `This recommendation helps ${businessName} address their challenges.`,
+          explanation:
+            personalized.explanation ||
+            `Strategic recommendation for ${businessName} in ${industry || 'their industry'}.`,
+          whyItMatters:
+            personalized.whyItMatters ||
+            `This matters for ${businessName} because it addresses ${challengesText}.`,
+          howToStart:
+            Array.isArray(personalized.howToStart) && personalized.howToStart.length > 0
+              ? personalized.howToStart
+              : createFallbackRecommendation(template, onboardingData).howToStart,
           feature: template.feature,
           featureLink: template.featureLink,
           icon: template.icon,
           priority: template.priority,
           category: template.category,
           estimatedTime: '30 minutes to 2 hours',
-          impact: `Tailored for ${businessName}`
-        })
-        
-        const templateDuration = ((Date.now() - templateStartTime) / 1000).toFixed(1)
-        console.log(`✅ Template ${i + 1}/3 done in ${templateDuration}s`)
-        
+          impact: `Tailored for ${businessName}`,
+        }
       } catch (error) {
         console.error(`❌ Error on template ${template.id}:`, error)
-        // Use fallback - ensure we still get 3 recommendations
-        const fallback = createFallbackRecommendation(template, onboardingData)
-        personalizedRecommendations.push(fallback)
-        console.log(`⚠️ Using fallback for template ${template.id}`)
+        return createFallbackRecommendation(template, onboardingData)
       }
     }
 
-    // Ensure we have exactly 3 recommendations
-    if (personalizedRecommendations.length < 3) {
-      console.warn(`⚠️ Only got ${personalizedRecommendations.length} recommendations, filling to 3...`)
-      const existingIds = personalizedRecommendations.map(r => r.id)
-      const additionalTemplates = RECOMMENDATION_TEMPLATES
-        .filter(t => !existingIds.includes(t.id))
-        .slice(0, 3 - personalizedRecommendations.length)
-      
+    const personalizedRecommendations = await Promise.all(
+      selectedTemplates.map((template, i) => personalizeTemplate(template, i))
+    )
+
+    let finalRecommendations = personalizedRecommendations.slice(0, ROADMAP_RECOMMENDATION_COUNT)
+
+    if (finalRecommendations.length < ROADMAP_RECOMMENDATION_COUNT) {
+      const existingIds = finalRecommendations.map((r) => r.id)
+      const additionalTemplates = RECOMMENDATION_TEMPLATES.filter(
+        (t) => !existingIds.includes(t.id)
+      ).slice(0, ROADMAP_RECOMMENDATION_COUNT - finalRecommendations.length)
       for (const template of additionalTemplates) {
-        personalizedRecommendations.push(createFallbackRecommendation(template, onboardingData))
+        finalRecommendations.push(createFallbackRecommendation(template, onboardingData))
       }
     }
 
-    // Ensure exactly 3 (no more, no less)
-    const finalRecommendations = personalizedRecommendations.slice(0, 3)
+    finalRecommendations = finalRecommendations.slice(0, ROADMAP_RECOMMENDATION_COUNT)
     
     const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1)
     console.log(`✅ Generated exactly ${finalRecommendations.length} personalized recommendations in ${totalDuration}s`)
@@ -250,9 +240,10 @@ Return ONLY the JSON object, nothing else.`
 }
 
 /**
- * Select 3 relevant recommendation templates based on user's onboarding data
+ * Select roadmap recommendation templates based on user's onboarding data
  */
 function selectRelevantTemplates(onboardingData: any, requestDifferent: boolean): RecommendationTemplate[] {
+  const count = ROADMAP_RECOMMENDATION_COUNT
   const challenges = Array.isArray(onboardingData?.challenges) 
     ? onboardingData.challenges 
     : (onboardingData?.challenges ? [onboardingData.challenges] : [])
@@ -339,71 +330,50 @@ function selectRelevantTemplates(onboardingData: any, requestDifferent: boolean)
   let selected: RecommendationTemplate[] = []
 
   if (requestDifferent) {
-    // When requesting different recommendations, use a rotation strategy
-    // Skip the top 3 templates and select from the next best matches
-    const skipCount = 3
-    const topThreeIds = sortedTemplates.slice(0, skipCount).map(item => item.template.id)
-    
-    // Get candidates that are NOT in the top 3
+    const skipCount = count
+    const topIds = sortedTemplates.slice(0, skipCount).map((item) => item.template.id)
     const differentCandidates = sortedTemplates
-      .filter(item => !topThreeIds.includes(item.template.id))
+      .filter((item) => !topIds.includes(item.template.id))
       .sort((a, b) => {
-        // Still prioritize by score, but add some randomness for variety
         const scoreDiff = b.score - a.score
-        // If scores are close (within 5 points), randomize
-        if (Math.abs(scoreDiff) <= 5) {
-          return Math.random() - 0.5
-        }
+        if (Math.abs(scoreDiff) <= 5) return Math.random() - 0.5
         return scoreDiff
       })
-    
-    // Take the best 3 from the different candidates
-    if (differentCandidates.length >= 3) {
-      selected = differentCandidates.slice(0, 3).map(item => item.template)
+
+    if (differentCandidates.length >= count) {
+      selected = differentCandidates.slice(0, count).map((item) => item.template)
     } else {
-      // If we don't have enough different candidates, take what we have and fill from all
-      selected = differentCandidates.map(item => item.template)
-      // Fill remaining from all templates (excluding already selected)
+      selected = differentCandidates.map((item) => item.template)
       const remaining = scoredTemplates
-        .filter(item => !selected.some(st => st.id === item.template.id))
+        .filter((item) => !selected.some((st) => st.id === item.template.id))
         .sort((a, b) => b.score - a.score)
-        .slice(0, 3 - selected.length)
-        .map(item => item.template)
+        .slice(0, count - selected.length)
+        .map((item) => item.template)
       selected.push(...remaining)
     }
-    
-    console.log(`🔄 Generating DIFFERENT recommendations (skipped top 3, selected: ${selected.map(t => t.id).join(', ')})`)
   } else {
-    // Normal selection: take top 3
-    selected = sortedTemplates
-      .slice(0, 3)
-      .map(item => item.template)
-    console.log(`✅ Generating initial recommendations (selected: ${selected.map(t => t.id).join(', ')})`)
+    selected = sortedTemplates.slice(0, count).map((item) => item.template)
   }
 
-  // If we don't have 3, fill with highest scoring templates regardless of requirements
-  if (selected.length < 3) {
+  if (selected.length < count) {
     const remaining = scoredTemplates
-      .filter(item => !selected.some(st => st.id === item.template.id))
+      .filter((item) => !selected.some((st) => st.id === item.template.id))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 3 - selected.length)
-      .map(item => item.template)
+      .slice(0, count - selected.length)
+      .map((item) => item.template)
     selected.push(...remaining)
   }
 
-  // Ensure we have exactly 3 templates
-  const final = selected.slice(0, 3)
-  
-  // If we still don't have 3, fill with highest scoring templates
-  if (final.length < 3) {
+  const final = selected.slice(0, count)
+  if (final.length < count) {
     const remaining = scoredTemplates
-      .filter(item => !final.some(st => st.id === item.template.id))
+      .filter((item) => !final.some((st) => st.id === item.template.id))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 3 - final.length)
-      .map(item => item.template)
+      .slice(0, count - final.length)
+      .map((item) => item.template)
     final.push(...remaining)
   }
-  
-  return final.slice(0, 3) // Ensure exactly 3
+
+  return final.slice(0, count)
 }
 

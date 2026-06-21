@@ -102,6 +102,25 @@ export interface RevenueGoal {
     achieved: boolean
     achievedDate?: string
   }[]
+  /** Venture Quest goal id when linked for action sync */
+  ventureQuestGoalId?: string
+  date: string
+}
+
+export type RevenueCheckInDriver =
+  | 'outreach'
+  | 'pricing'
+  | 'new-offer'
+  | 'retention'
+  | 'partnerships'
+  | 'other'
+
+export interface WeeklyRevenueCheckIn {
+  id: string
+  weekKey: string
+  amount: number
+  driver: RevenueCheckInDriver
+  note?: string
   date: string
 }
 
@@ -154,6 +173,7 @@ export interface RevenueData {
   goals: RevenueGoal[]
   ltvAnalyses: LTVAnalysis[]
   scenarios: ScenarioPlan[]
+  weeklyCheckIns: WeeklyRevenueCheckIn[]
 }
 
 export const INITIAL_REVENUE_DATA: RevenueData = {
@@ -162,6 +182,7 @@ export const INITIAL_REVENUE_DATA: RevenueData = {
   pricingStrategies: [],
   goals: [],
   ltvAnalyses: [],
-  scenarios: []
+  scenarios: [],
+  weeklyCheckIns: [],
 }
 

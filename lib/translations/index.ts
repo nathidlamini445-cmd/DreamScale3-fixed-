@@ -213,10 +213,10 @@ const translations: Record<Language, Translations> = {
       revenue: 'Revenue',
       leadership: 'Leadership',
       teams: 'Teams',
-      competitorIntelligence: 'Competitor Intelligence',
+      competitorIntelligence: 'Competitive Intelligence',
       calendar: 'Calendar',
       projects: 'Projects',
-      hypeos: 'HypeOS'
+      hypeos: 'Venture Quest'
     },
     home: {
       sessionActive: 'Session Active',
@@ -377,7 +377,7 @@ const translations: Record<Language, Translations> = {
       competitorIntelligence: 'Intelligence Concurrentielle',
       calendar: 'Calendrier',
       projects: 'Projets',
-      hypeos: 'HypeOS'
+      hypeos: 'Venture Quest'
     },
     home: {
       sessionActive: 'Session Active',
@@ -538,7 +538,7 @@ const translations: Record<Language, Translations> = {
       competitorIntelligence: 'Wettbewerbsanalyse',
       calendar: 'Kalender',
       projects: 'Projekte',
-      hypeos: 'HypeOS'
+      hypeos: 'Venture Quest'
     },
     home: {
       sessionActive: 'Sitzung Aktiv',
@@ -699,7 +699,7 @@ const translations: Record<Language, Translations> = {
       competitorIntelligence: 'Inteligencia Competitiva',
       calendar: 'Calendario',
       projects: 'Proyectos',
-      hypeos: 'HypeOS'
+      hypeos: 'Venture Quest'
     },
     home: {
       sessionActive: 'Sesión Activa',

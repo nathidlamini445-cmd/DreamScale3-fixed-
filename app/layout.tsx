@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import dynamic from 'next/dynamic'
+import { Suspense } from 'react'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -26,6 +27,14 @@ const BizoraLoadingOverlayWrapper = dynamic(
   () =>
     import('@/components/bizora-loading-wrapper').then((m) => ({
       default: m.BizoraLoadingOverlayWrapper,
+    })),
+  { ssr: false, loading: () => null }
+)
+
+const GoogleOAuthCallback = dynamic(
+  () =>
+    import('@/components/integrations/GoogleOAuthCallback').then((m) => ({
+      default: m.GoogleOAuthCallback,
     })),
   { ssr: false, loading: () => null }
 )
@@ -117,6 +126,9 @@ export default function RootLayout({
                           {children}
                         </AppWrapper>
                         <Analytics />
+                        <Suspense fallback={null}>
+                          <GoogleOAuthCallback />
+                        </Suspense>
                         <Toaster />
                       </div>
                     </MobileBlocker>

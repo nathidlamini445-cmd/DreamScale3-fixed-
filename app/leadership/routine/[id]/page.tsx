@@ -1,40 +1,18 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { ArrowLeft, Calendar, Clock, Target, CheckCircle2 } from "lucide-react"
 import { CEORoutine } from '@/lib/leadership-types'
+import { useLeadershipDetail } from '@/hooks/use-leadership-detail'
+import { AddRoutineToGoogleCalendarButton } from '@/components/integrations/AddRoutineToGoogleCalendarButton'
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function LeadershipRoutineDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const [routine, setRoutine] = useState<CEORoutine | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const loadRoutine = () => {
-      try {
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('leadership:data') : null
-        if (saved) {
-          const leadershipData = JSON.parse(saved)
-          const routines = leadershipData.routines || []
-          const foundRoutine = routines.find((r: CEORoutine) => r.id === params.id)
-          if (foundRoutine) {
-            setRoutine(foundRoutine)
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load routine:', e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadRoutine()
-  }, [params.id])
+  const { item: routine, loading } = useLeadershipDetail<CEORoutine>('routines', params.id)
 
   if (loading) {
     return (
@@ -141,6 +119,7 @@ export default function LeadershipRoutineDetailPage() {
                   </span>
                 </div>
               </div>
+              <AddRoutineToGoogleCalendarButton routine={routine} />
             </div>
           </div>
 

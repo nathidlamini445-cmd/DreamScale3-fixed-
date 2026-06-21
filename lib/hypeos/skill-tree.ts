@@ -397,18 +397,39 @@ export function getRecommendedSkill(
     totalPoints: number;
   }
 ): Skill | null {
-  // Find first unlockable skill that isn't mastered
+  // First: active skill already in progress
+  for (const branch of skillTree.branches) {
+    for (const skill of branch.skills) {
+      if (skill.unlocked && !skill.mastered && skill.progress > 0) {
+        return skill;
+      }
+    }
+  }
+
+  // Then: first unlocked but not started
+  for (const branch of skillTree.branches) {
+    for (const skill of branch.skills) {
+      if (skill.unlocked && !skill.mastered) {
+        return skill;
+      }
+    }
+  }
+
+  // Finally: first unlockable skill
   for (const branch of skillTree.branches) {
     for (const skill of branch.skills) {
       if (!skill.unlocked && !userProgress.masteredSkills.includes(skill.id)) {
         const unlockCheck = canUnlockSkill(skill, userProgress);
-        if (unlockCheck.canUnlock) {
+        const prereqsMet = skill.prerequisites.every((p) =>
+          userProgress.masteredSkills.includes(p)
+        );
+        if (unlockCheck.canUnlock || (prereqsMet && skill.prerequisites.length > 0)) {
           return skill;
         }
       }
     }
   }
-  
+
   return null;
 }
 
@@ -446,7 +467,10 @@ export function calculateSkillTreeProgress(skillTree: SkillTree): {
 // Initialize skill tree from defaults
 export function initializeSkillTree(): SkillTree {
   const tree: SkillTree = {
-    branches: DEFAULT_SKILL_TREE.map(branch => ({ ...branch })),
+    branches: DEFAULT_SKILL_TREE.map((branch) => ({
+      ...branch,
+      skills: branch.skills.map((skill) => ({ ...skill })),
+    })),
     totalSkills: 0,
     unlockedSkills: 0,
     masteredSkills: 0,
@@ -468,32 +492,115 @@ export function initializeSkillTree(): SkillTree {
   return tree;
 }
 
-// Load skill tree from storage
-export function loadSkillTree(userId: string): SkillTree {
+function parseStoredSkillTree(stored: string): SkillTree {
+  const tree: SkillTree = JSON.parse(stored);
+  tree.branches.forEach((branch) => {
+    branch.skills.forEach((skill) => {
+      if (skill.unlockedAt) skill.unlockedAt = new Date(skill.unlockedAt);
+      if (skill.masteredAt) skill.masteredAt = new Date(skill.masteredAt);
+    });
+  });
+  return tree;
+}
+
+function skillTreeStorageKey(userId: string, goalId?: string | null): string {
+  return goalId
+    ? `hypeos-skill-tree-${userId}-${goalId}`
+    : `hypeos-skill-tree-${userId}`;
+}
+
+const PATH_PROGRESS_STORAGE_VERSION = '3';
+
+function resetPathStepProgress(tree: SkillTree): SkillTree {
+  const fresh = initializeSkillTree();
+  const next = JSON.parse(JSON.stringify(tree)) as SkillTree;
+
+  for (const branch of next.branches) {
+    const freshBranch = fresh.branches.find((b) => b.id === branch.id);
+    for (const skill of branch.skills) {
+      const freshSkill = freshBranch?.skills.find((s) => s.id === skill.id);
+      skill.tasksCompleted = 0;
+      skill.pointsEarned = 0;
+      skill.progress = 0;
+      skill.mastered = false;
+      skill.masteredAt = undefined;
+      if (freshSkill) {
+        skill.unlocked = freshSkill.unlocked;
+        if (!skill.unlocked) skill.unlockedAt = undefined;
+      }
+    }
+    branch.progress = 0;
+  }
+
+  const pd = calculateSkillTreeProgress(next);
+  next.overallProgress = pd.overallProgress;
+  next.unlockedSkills = pd.unlockedCount;
+  next.masteredSkills = pd.masteredCount;
+  return next;
+}
+
+function applyPathProgressMigration(
+  userId: string,
+  goalId: string | null | undefined,
+  tree: SkillTree
+): SkillTree {
+  if (typeof window === 'undefined' || !goalId) return tree;
+  const key = `hypeos-path-progress-v-${userId}-${goalId}`;
+  if (localStorage.getItem(key) === PATH_PROGRESS_STORAGE_VERSION) return tree;
+  const reset = resetPathStepProgress(tree);
+  localStorage.setItem(key, PATH_PROGRESS_STORAGE_VERSION);
+  return reset;
+}
+
+// Load skill tree from storage (per-goal when goalId is provided)
+export function loadSkillTree(userId: string, goalId?: string | null): SkillTree {
   try {
-    const stored = localStorage.getItem(`hypeos-skill-tree-${userId}`);
-    if (stored) {
-      const tree: SkillTree = JSON.parse(stored);
-      // Convert date strings back to Date objects
-      tree.branches.forEach(branch => {
-        branch.skills.forEach(skill => {
-          if (skill.unlockedAt) skill.unlockedAt = new Date(skill.unlockedAt);
-          if (skill.masteredAt) skill.masteredAt = new Date(skill.masteredAt);
-        });
-      });
-      return tree;
+    if (typeof window === 'undefined') return initializeSkillTree();
+
+    let tree: SkillTree | null = null;
+
+    if (goalId) {
+      const goalKey = skillTreeStorageKey(userId, goalId);
+      const stored = localStorage.getItem(goalKey);
+      if (stored) tree = parseStoredSkillTree(stored);
+
+      if (!tree) {
+      // One-time migration: legacy tree applies to the first goal only; others start fresh.
+      const legacyMigratedKey = `hypeos-skill-tree-legacy-migrated-${userId}`;
+      const legacy = localStorage.getItem(skillTreeStorageKey(userId));
+      if (legacy && !localStorage.getItem(legacyMigratedKey)) {
+        localStorage.setItem(goalKey, legacy);
+        localStorage.setItem(legacyMigratedKey, goalId);
+        tree = parseStoredSkillTree(legacy);
+      }
+      }
+    } else {
+      const stored = localStorage.getItem(skillTreeStorageKey(userId));
+      if (stored) tree = parseStoredSkillTree(stored);
+    }
+
+    if (tree) {
+      return applyPathProgressMigration(userId, goalId, tree);
     }
   } catch (error) {
     console.error('Error loading skill tree:', error);
   }
-  
+
   return initializeSkillTree();
 }
 
-// Save skill tree to storage
-export function saveSkillTree(userId: string, tree: SkillTree): void {
+// Save skill tree to storage (per-goal when goalId is provided)
+export function saveSkillTree(
+  userId: string,
+  tree: SkillTree,
+  goalId?: string | null
+): void {
   try {
-    localStorage.setItem(`hypeos-skill-tree-${userId}`, JSON.stringify(tree));
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(
+      skillTreeStorageKey(userId, goalId),
+      JSON.stringify(tree)
+    );
   } catch (error) {
     console.error('Error saving skill tree:', error);
   }

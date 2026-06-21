@@ -87,7 +87,7 @@ export const RECOMMENDATION_TEMPLATES: RecommendationTemplate[] = [
     category: 'Customer Growth',
     priority: 'high',
     feature: 'Systems',
-    featureLink: '/revenue?tab=systems',
+    featureLink: '/systems',
     icon: 'settings',
     selectionCriteria: {
       challenges: ['Customer Acquisition', 'Operations'],
@@ -174,7 +174,7 @@ export const RECOMMENDATION_TEMPLATES: RecommendationTemplate[] = [
     category: 'Scaling',
     priority: 'high',
     feature: 'Systems',
-    featureLink: '/revenue?tab=systems',
+    featureLink: '/systems',
     icon: 'settings',
     selectionCriteria: {
       challenges: ['Scaling', 'Operations'],
@@ -225,7 +225,7 @@ export const RECOMMENDATION_TEMPLATES: RecommendationTemplate[] = [
     category: 'Scaling',
     priority: 'high',
     feature: 'Systems',
-    featureLink: '/revenue?tab=systems',
+    featureLink: '/systems',
     icon: 'settings',
     selectionCriteria: {
       challenges: ['Scaling', 'Operations'],
@@ -250,7 +250,7 @@ export const RECOMMENDATION_TEMPLATES: RecommendationTemplate[] = [
     category: 'Scaling',
     priority: 'high',
     feature: 'Systems',
-    featureLink: '/revenue?tab=systems',
+    featureLink: '/systems',
     icon: 'settings',
     selectionCriteria: {
       challenges: ['Scaling'],
@@ -598,7 +598,7 @@ export const RECOMMENDATION_TEMPLATES: RecommendationTemplate[] = [
     category: 'Operations',
     priority: 'high',
     feature: 'Systems',
-    featureLink: '/revenue?tab=systems',
+    featureLink: '/systems',
     icon: 'settings',
     selectionCriteria: {
       challenges: ['Operations', 'Scaling'],
@@ -709,7 +709,7 @@ export const RECOMMENDATION_TEMPLATES: RecommendationTemplate[] = [
     category: 'Customer Growth',
     priority: 'high',
     feature: 'Systems',
-    featureLink: '/revenue?tab=systems',
+    featureLink: '/systems',
     icon: 'settings',
     selectionCriteria: {
       challenges: ['Marketing', 'Customer Acquisition'],
