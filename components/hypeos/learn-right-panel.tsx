@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowRight, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { vq } from '@/lib/hypeos/path-ui-theme'
 import type { Quest } from '@/lib/hypeos/quest-system'
 import type { Skill } from '@/lib/hypeos/skill-tree'
 import { canUnlockSkill } from '@/lib/hypeos/skill-tree'
@@ -59,16 +60,19 @@ export default function LearnRightPanel({
         : null
 
   return (
-    <aside className="hidden w-[248px] shrink-0 flex-col gap-5 overflow-y-auto border-l border-white/[0.06] bg-[#0a0f12] p-5 xl:flex">
-      {/* What's next */}
+    <aside
+      className={cn(
+        'hidden w-[248px] shrink-0 flex-col gap-5 overflow-y-auto border-l p-5 xl:flex',
+        vq.surface,
+        vq.border
+      )}
+    >
       {nextLabel && (
         <div className="border-l-2 border-[#39d2c0] pl-4">
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#39d2c0]/70">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#39d2c0]/80">
             Up next
           </p>
-          <p className="mt-1 text-sm font-medium leading-snug text-white/90">
-            {nextLabel}
-          </p>
+          <p className={cn('mt-1 text-sm font-medium leading-snug', vq.body)}>{nextLabel}</p>
           <button
             type="button"
             onClick={handleContinuePath}
@@ -80,48 +84,50 @@ export default function LearnRightPanel({
         </div>
       )}
 
-      {/* Active skill detail */}
       {activeSkill ? (
-        <div className="space-y-3 border-t border-white/[0.06] pt-5">
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">
+        <div className={cn('space-y-3 border-t pt-5', vq.border)}>
+          <p className={cn('text-[10px] font-medium uppercase tracking-[0.18em]', vq.mutedFaint)}>
             Selected
           </p>
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-lg">
+            <div
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-lg',
+                'border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/[0.03]'
+              )}
+            >
               <span className="opacity-60">{activeSkill.icon}</span>
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-medium text-white/90">{activeSkill.name}</h3>
-              <p className="mt-0.5 text-xs text-white/40">
+              <h3 className={cn('text-sm font-medium', vq.body)}>{activeSkill.name}</h3>
+              <p className={cn('mt-0.5 text-xs', vq.mutedFaint)}>
                 {activeSkill.difficulty} · {activeSkill.estimatedTime}
               </p>
             </div>
           </div>
 
-          <p className="text-xs leading-relaxed text-white/45">
-            {activeSkill.description}
-          </p>
+          <p className={cn('text-xs leading-relaxed', vq.muted)}>{activeSkill.description}</p>
 
           {activeSkill.unlocked && !activeSkill.mastered && (
             <div className="space-y-1.5">
-              <div className="flex justify-between text-xs text-white/40">
+              <div className={cn('flex justify-between text-xs', vq.mutedFaint)}>
                 <span>Progress</span>
                 <span>{Math.round(activeSkill.progress)}%</span>
               </div>
-              <div className="h-px overflow-hidden bg-white/[0.06]">
+              <div className={cn('h-px overflow-hidden', vq.track)}>
                 <div
                   className="h-full bg-[#39d2c0]/70"
                   style={{ width: `${Math.max(activeSkill.progress, 2)}%` }}
                 />
               </div>
-              <p className="text-[11px] text-white/30">
+              <p className={cn('text-[11px]', vq.mutedFaint)}>
                 {activeSkill.tasksCompleted}/{activeSkill.requiredTasks} tasks logged
               </p>
             </div>
           )}
 
           {!activeSkill.unlocked && (
-            <ul className="space-y-1 text-xs text-white/40">
+            <ul className={cn('space-y-1 text-xs', vq.muted)}>
               {canUnlockSkill(activeSkill, {
                 completedTasks: userStats.completedTasks,
                 totalPoints: userStats.totalPoints,
@@ -142,8 +148,8 @@ export default function LearnRightPanel({
             className={cn(
               'h-9 w-full rounded-lg text-sm font-medium',
               activeSkill.unlocked && !activeSkill.mastered
-                ? 'bg-[#39d2c0] text-[#0a0f12] hover:bg-[#39d2c0]/90'
-                : 'bg-white/[0.04] text-white/30'
+                ? vq.accentBtn
+                : 'bg-gray-100 text-slate-400 dark:bg-white/[0.04] dark:text-white/30'
             )}
           >
             {activeSkill.mastered
@@ -154,31 +160,30 @@ export default function LearnRightPanel({
           </Button>
         </div>
       ) : (
-        <p className="border-t border-white/[0.06] pt-5 text-xs text-white/35">
+        <p className={cn('border-t pt-5 text-xs', vq.border, vq.mutedFaint)}>
           Select a milestone on your path
         </p>
       )}
 
-      {/* Daily quests */}
-      <div className="border-t border-white/[0.06] pt-5">
-        <h3 className="mb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">
+      <div className={cn('border-t pt-5', vq.border)}>
+        <h3 className={cn('mb-3 text-[10px] font-medium uppercase tracking-[0.18em]', vq.mutedFaint)}>
           Daily quests
         </h3>
         <div className="space-y-3">
           {dailyQuests.length === 0 ? (
-            <p className="text-xs text-white/30">No quests yet</p>
+            <p className={cn('text-xs', vq.mutedFaint)}>No quests yet</p>
           ) : (
             dailyQuests.map((quest) => {
               const pct = Math.min((quest.current / quest.target) * 100, 100)
               return (
                 <div key={quest.id}>
                   <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                    <span className="truncate text-white/55">{quest.title}</span>
-                    <span className="shrink-0 text-white/30">
+                    <span className={cn('truncate', vq.muted)}>{quest.title}</span>
+                    <span className={cn('shrink-0', vq.mutedFaint)}>
                       {quest.current}/{quest.target}
                     </span>
                   </div>
-                  <div className="h-px overflow-hidden bg-white/[0.06]">
+                  <div className={cn('h-px overflow-hidden', vq.track)}>
                     <div
                       className="h-full bg-[#39d2c0]/60"
                       style={{

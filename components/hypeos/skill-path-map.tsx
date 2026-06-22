@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { vq } from '@/lib/hypeos/path-ui-theme'
 import type { Skill, SkillBranch, SkillTree } from '@/lib/hypeos/skill-tree'
 import type { UserSkillStats } from '@/lib/hypeos/sync-skill-tree'
 import {
@@ -56,7 +57,7 @@ function PathConnector({
       className={cn(
         'mx-auto w-px',
         tall ? 'h-10' : 'h-6',
-        completed ? 'bg-[#39d2c0]/50' : 'bg-white/[0.08]'
+        completed ? 'bg-[#39d2c0]/50' : 'bg-gray-200 dark:bg-white/[0.08]'
       )}
       aria-hidden
     />
@@ -96,13 +97,13 @@ function SkillNode({
         <div
           className={cn(
             'relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border transition-all',
-            locked && 'border-white/10 bg-transparent text-white/25',
+            locked && 'border-gray-200 bg-transparent text-gray-300 dark:border-white/10 dark:text-white/25',
             mastered && 'border-[#39d2c0]/40 bg-[#39d2c0]/10 text-[#39d2c0]',
             active &&
               !isCurrent &&
-              'border-white/20 bg-white/[0.03] text-white/80',
+              'border-gray-300 bg-gray-50 text-slate-700 dark:border-white/20 dark:bg-white/[0.03] dark:text-white/80',
             isCurrent &&
-              'border-[#39d2c0] bg-[#39d2c0]/10 text-white shadow-[0_0_0_4px_rgba(57,210,192,0.12)]'
+              'border-[#39d2c0] bg-[#39d2c0]/10 text-slate-800 shadow-[0_0_0_4px_rgba(57,210,192,0.12)] dark:text-white'
           )}
         >
           {locked ? (
@@ -113,19 +114,19 @@ function SkillNode({
             <span className="text-lg opacity-70">{skill.icon}</span>
           )}
           {isRecommended && active && (
-            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#39d2c0] ring-2 ring-[#0a0f12]" />
+            <span className={cn('absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#39d2c0] ring-2', vq.ring)} />
           )}
         </div>
         <div className="min-w-0">
           <p
             className={cn(
               'text-sm font-medium leading-snug',
-              locked ? 'text-white/30' : 'text-white/90'
+              locked ? 'text-slate-400 dark:text-white/30' : 'text-slate-800 dark:text-white/90'
             )}
           >
             {skill.name}
           </p>
-          <p className="mt-0.5 text-[11px] text-white/35">
+          <p className={cn('mt-0.5 text-[11px]', vq.mutedFaint)}>
             {skill.tasksCompleted}/{skill.requiredTasks} tasks · {skill.estimatedTime}
           </p>
         </div>
@@ -165,9 +166,9 @@ function TaskMilestone({
         className={cn(
           'flex max-w-[280px] items-center gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors',
           isNext && 'border-[#39d2c0]/40 bg-[#39d2c0]/[0.06]',
-          !isNext && completed && 'border-white/5 bg-white/[0.02]',
-          !isNext && !completed && !locked && 'border-white/8 bg-transparent',
-          locked && 'border-white/5 opacity-40',
+          !isNext && completed && 'border-gray-100 bg-gray-50 dark:border-white/5 dark:bg-white/[0.02]',
+          !isNext && !completed && !locked && 'border-gray-200 bg-white dark:border-white/8 dark:bg-transparent',
+          locked && 'border-gray-100 opacity-40 dark:border-white/5',
           canOpen && 'cursor-pointer hover:border-[#39d2c0]/50 hover:bg-[#39d2c0]/[0.08]'
         )}
       >
@@ -176,7 +177,7 @@ function TaskMilestone({
             'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border',
             completed && 'border-[#39d2c0]/50 bg-[#39d2c0]/20',
             isNext && !completed && 'border-[#39d2c0] bg-transparent',
-            !completed && !isNext && 'border-white/15 bg-transparent'
+            !completed && !isNext && 'border-gray-300 bg-transparent dark:border-white/15'
           )}
         >
           {completed ? (
@@ -194,7 +195,11 @@ function TaskMilestone({
           <p
             className={cn(
               'text-[11px] leading-snug',
-              completed ? 'text-white/40 line-through' : 'text-white/65'
+              completed
+                ? cn(vq.mutedFaint, 'line-through')
+                : isNext
+                  ? 'text-slate-800 dark:text-white/90'
+                  : vq.muted
             )}
           >
             {label}
@@ -219,7 +224,7 @@ function BranchTabs({
   onLockedBranch?: () => void
 }) {
   return (
-    <div className="mb-8 flex gap-6 overflow-x-auto border-b border-white/[0.06] pb-px scrollbar-none">
+    <div className={cn('mb-8 flex gap-6 overflow-x-auto border-b pb-px scrollbar-none', vq.border)}>
       {branches.map((b) => {
         const selected = activeId === b.id
         const locked = !canAccessVentureQuestBranch(b.id, isPro)
@@ -237,10 +242,10 @@ function BranchTabs({
             className={cn(
               'shrink-0 border-b-2 pb-2.5 text-sm transition-colors flex items-center gap-1',
               selected
-                ? 'border-[#39d2c0] font-medium text-white'
+                ? cn('border-[#39d2c0] font-medium', vq.heading)
                 : locked
-                  ? 'border-transparent text-white/25 cursor-not-allowed'
-                  : 'border-transparent text-white/40 hover:text-white/65'
+                  ? cn('border-transparent cursor-not-allowed', vq.mutedFaint)
+                  : cn('border-transparent', vq.navInactive)
             )}
           >
             <span className="mr-1.5 opacity-60">{b.icon}</span>
@@ -323,33 +328,31 @@ export default function SkillPathMap({
 
   if (variant !== 'learn') {
     return (
-      <div className="space-y-4 text-white">
+      <div className={cn('space-y-4', vq.shell)}>
         <BranchTabs branches={skillTree.branches} activeId={branchId} onSelect={setBranchId} />
-        <p className="text-sm text-white/50">
-          {skillTree.masteredSkills} of {skillTree.totalSkills} skills
-        </p>
+        <p className={cn('text-sm', vq.muted)}>{skillTree.masteredSkills} of {skillTree.totalSkills} skills</p>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div data-hypeos-path-map className="mx-auto w-full max-w-2xl">
       <div className="mb-8">
         <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#39d2c0]/80">
           Your path
         </p>
-        <h1 className="mt-1 text-xl font-medium tracking-tight text-white sm:text-2xl">
+        <h1 className={cn('mt-1 text-xl font-medium tracking-tight sm:text-2xl', vq.heading)}>
           {branch.name}
         </h1>
         {pathProfileLabel && (
-          <p className="mt-1 text-sm text-white/45">{pathProfileLabel} track</p>
+          <p className={cn('mt-1 text-sm', vq.muted)}>{pathProfileLabel} track</p>
         )}
-        <div className="mt-3 flex items-center gap-4 text-xs text-white/40">
+        <div className={cn('mt-3 flex items-center gap-4 text-xs', vq.mutedFaint)}>
           <span>{skillTree.masteredSkills}/{skillTree.totalSkills} milestones</span>
           <span>·</span>
           <span>{progressPct}% overall</span>
         </div>
-        <div className="mt-3 h-px w-full overflow-hidden rounded-full bg-white/[0.06]">
+        <div className={cn('mt-3 h-px w-full overflow-hidden rounded-full', vq.track)}>
           <div
             className="h-full rounded-full transition-all"
             style={{
@@ -362,14 +365,11 @@ export default function SkillPathMap({
 
       {!isPro && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#39d2c0]/20 bg-[#39d2c0]/[0.06] px-4 py-3">
-          <p className="text-xs text-white/70">
+          <p className={cn('text-xs text-slate-600 dark:text-white/70')}>
             <span className="font-medium text-[#39d2c0]">Free plan:</span> Sales Mastery path
             only · 3 path steps/day · 2 AI task generations/month
           </p>
-          <Link
-            href="/billing"
-            className="shrink-0 rounded-md bg-[#39d2c0] px-3 py-1.5 text-xs font-medium text-[#0a0f12] hover:bg-[#39d2c0]/90"
-          >
+          <Link href="/billing" className={cn('shrink-0 rounded-md px-3 py-1.5 text-xs font-medium', vq.accentBtn)}>
             Upgrade to Pro
           </Link>
         </div>

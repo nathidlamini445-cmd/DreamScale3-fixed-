@@ -77,7 +77,13 @@ export const STREAK_MILESTONES: StreakMilestone[] = [
   }
 ];
 
-/** Calendar-day difference (local midnight to midnight). */
+/** Parse stored last-active timestamp; missing/invalid → epoch (never active). */
+export function parseLastActiveDate(value?: string | Date | null): Date {
+  if (!value) return new Date(0)
+  const d = value instanceof Date ? new Date(value.getTime()) : new Date(value)
+  return Number.isNaN(d.getTime()) ? new Date(0) : d
+}
+
 export function daysSinceLastActiveMidnight(
   lastActiveDate: Date,
   today: Date = new Date()
@@ -136,21 +142,23 @@ export function syncStreakOnDayChange(
   streakData: StreakData,
   today: Date = new Date()
 ): StreakData {
-  const lastActive = new Date(streakData.lastActiveDate)
-  if (!lastActive.getTime() || Number.isNaN(lastActive.getTime())) {
-    return { ...streakData, currentStreak: 0 }
-  }
+  const lastActive = parseLastActiveDate(streakData.lastActiveDate)
 
-  const daysSince = daysSinceLastActiveMidnight(lastActive, today)
+  if (streakData.currentStreak > 0) {
+    // No recorded completion day — streak cannot be valid
+    if (lastActive.getTime() <= 0) {
+      return { ...streakData, lastActiveDate: lastActive, currentStreak: 0 }
+    }
 
-  if (daysSince > 1 && streakData.currentStreak > 0) {
-    return {
-      ...streakData,
-      currentStreak: 0,
+    const daysSince = daysSinceLastActiveMidnight(lastActive, today)
+
+    // Duolingo-style: skip one or more full calendar days → streak breaks
+    if (daysSince > 1) {
+      return { ...streakData, lastActiveDate: lastActive, currentStreak: 0 }
     }
   }
 
-  return streakData
+  return { ...streakData, lastActiveDate: lastActive }
 }
 
 /** Alias for syncStreakOnDayChange */
@@ -178,12 +186,10 @@ export function updateStreak(
   streakData: StreakData,
   activityDate: Date = new Date()
 ): StreakData {
-  const daysSinceLastActive = daysSinceLastActiveMidnight(
-    new Date(streakData.lastActiveDate),
-    activityDate
-  )
+  const lastActive = parseLastActiveDate(streakData.lastActiveDate)
+  const daysSinceLastActive = daysSinceLastActiveMidnight(lastActive, activityDate)
 
-  let newStreakData = { ...streakData }
+  let newStreakData = { ...streakData, lastActiveDate: lastActive }
 
   if (daysSinceLastActive === 0) {
     if (newStreakData.currentStreak === 0) {

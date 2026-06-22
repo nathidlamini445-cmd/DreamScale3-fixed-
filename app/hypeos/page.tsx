@@ -46,6 +46,7 @@ import {
   getStreakMultiplier,
   getStreakLevel,
   syncStreakOnLoad,
+  parseLastActiveDate,
   checkAndResetStreakIfNeeded,
   type StreakData 
 } from '@/lib/hypeos/streak-calculator';
@@ -168,11 +169,13 @@ interface MiniWin {
 }
 
 function userToStreakData(user: User): StreakData {
+  const lastActive = parseLastActiveDate(user.lastActiveDate)
+  const streakStart = parseLastActiveDate(user.streakStartDate)
   return {
     currentStreak: user.currentStreak ?? 0,
     longestStreak: user.longestStreak ?? 0,
-    lastActiveDate: user.lastActiveDate ? new Date(user.lastActiveDate) : new Date(0),
-    streakStartDate: user.streakStartDate ? new Date(user.streakStartDate) : new Date(),
+    lastActiveDate: lastActive,
+    streakStartDate: streakStart.getTime() > 0 ? streakStart : lastActive,
     totalDaysActive: user.currentStreak ?? 0,
   };
 }
@@ -1888,10 +1891,9 @@ export default function HypeOSPage() {
             const today = new Date();
             const todayString = today.toDateString();
             const tasksLastDate = sessionData?.hypeos?.tasksLastDate || null;
-            const lastActiveDateStr =
-              userToLoad.lastActiveDate || tasksLastDate || null
+            const lastActiveDateStr = userToLoad.lastActiveDate || null
             const lastActiveDate = lastActiveDateStr
-              ? new Date(lastActiveDateStr)
+              ? parseLastActiveDate(lastActiveDateStr)
               : new Date(0)
             
             // Use updateStreak to properly calculate streak if it's a new day
@@ -2185,10 +2187,9 @@ export default function HypeOSPage() {
           const todayStringForGoal = todayForGoal.toDateString();
           const savedTasksLastDateForGoal = sessionData?.hypeos?.tasksLastDate || null;
           const goalToLoad = goalsList[0];
-          const lastActiveDateStr =
-            goalToLoad.lastActiveDate || savedTasksLastDateForGoal || null
+          const lastActiveDateStr = goalToLoad.lastActiveDate || null
           const lastActiveDate = lastActiveDateStr
-            ? new Date(lastActiveDateStr)
+            ? parseLastActiveDate(lastActiveDateStr)
             : new Date(0)
           
           // Use updateStreak to properly calculate streak if it's a new day
@@ -2952,17 +2953,8 @@ export default function HypeOSPage() {
     // Load performance profile
     const performanceProfile = getUserPerformanceProfile(userId);
     
-    // Get streak data - preserve existing dates if available
-    const userLastActiveDate = user.lastActiveDate ? new Date(user.lastActiveDate) : new Date();
-    const userStreakStartDate = user.streakStartDate ? new Date(user.streakStartDate) : new Date();
-    
-    const streakData: StreakData = {
-      currentStreak: user.currentStreak ?? 0,
-      longestStreak: user.longestStreak ?? 0,
-      lastActiveDate: userLastActiveDate,
-      streakStartDate: userStreakStartDate,
-      totalDaysActive: user.currentStreak ?? 0
-    };
+    // Get streak data — only real completion dates count (never default to "today")
+    const streakData = userToStreakData(user);
     
     // Convert task to unified format
     const unifiedTask: UnifiedTask = {
@@ -3068,54 +3060,37 @@ export default function HypeOSPage() {
       return synced
     })
     
-    // Check if this is the first task completed today and user has 0 streak
-    // If so, start the streak at 1
-    let finalUser = updatedUser;
-    if (user.currentStreak === 0 && updatedTasks.some(t => t.completed)) {
-      // First task completed today with 0 streak - start streak at 1
-      finalUser = {
-        ...updatedUser,
-        currentStreak: 1,
-        longestStreak: Math.max(1, user.longestStreak || 0),
-        goalProgress: Math.min(100, Math.round((updatedTasks.filter(t => t.completed).length / updatedTasks.length) * 100))
-      };
-      setUser(finalUser);
-      console.log('🔥 Starting streak at 1 day! Progress:', finalUser.goalProgress + '%');
-      
-      // Only save to localStorage for unauthenticated users
-      if (!authUser?.id) {
-        try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('hypeos:user', JSON.stringify(finalUser));
-            console.log('💾 Immediately saved user (streak started) to localStorage (unauthenticated)');
-          }
-        } catch (e) {
-          console.warn('Failed to immediately save user to localStorage', e);
+    const completedCount = updatedTasks.filter((t) => t.completed).length
+    const totalCount = updatedTasks.length
+    const newProgress = Math.min(
+      100,
+      Math.round((completedCount / Math.max(totalCount, 1)) * 100)
+    )
+
+    const streakAfterActivity = applyTodayActivityToStreak(
+      userToStreakData({ ...user, hypePoints: updatedUser.hypePoints })
+    )
+    let finalUser = mergeStreakIntoUser(
+      { ...updatedUser, goalProgress: newProgress },
+      streakAfterActivity
+    )
+    setUser(finalUser)
+
+    if (!authUser?.id) {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('hypeos:user', JSON.stringify(finalUser))
         }
-      }
-    } else {
-      // Update progress for existing streak
-      const completedCount = updatedTasks.filter(t => t.completed).length;
-      const totalCount = updatedTasks.length;
-      const newProgress = Math.min(100, Math.round((completedCount / totalCount) * 100));
-      finalUser = {
-        ...updatedUser,
-        goalProgress: newProgress
-      };
-      setUser(finalUser);
-      
-      // Only save to localStorage for unauthenticated users
-      if (!authUser?.id) {
-        try {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('hypeos:user', JSON.stringify(finalUser));
-            console.log('💾 Immediately saved user (progress updated) to localStorage (unauthenticated)');
-          }
-        } catch (e) {
-          console.warn('Failed to immediately save user to localStorage', e);
-        }
+      } catch (e) {
+        console.warn('Failed to immediately save user to localStorage', e)
       }
     }
+
+    console.log('🔥 Streak after task:', {
+      streak: finalUser.currentStreak,
+      lastActive: finalUser.lastActiveDate,
+      progress: finalUser.goalProgress + '%',
+    })
 
     // Update daily quests from today's activity (path steps + tasks + XP earned today)
     if (activeGoalId) {
@@ -3157,11 +3132,10 @@ export default function HypeOSPage() {
         // Use current user's streak dates if available, otherwise use today
         const userToSave = {
           ...finalUser,
-          lastActiveDate: finalUser.lastActiveDate || user.lastActiveDate || todayISO,
-          streakStartDate: finalUser.streakStartDate || user.streakStartDate || todayISO,
-          // Ensure streak values are preserved
-          currentStreak: finalUser.currentStreak ?? user.currentStreak ?? 0,
-          longestStreak: finalUser.longestStreak ?? user.longestStreak ?? 0
+          lastActiveDate: finalUser.lastActiveDate,
+          streakStartDate: finalUser.streakStartDate,
+          currentStreak: finalUser.currentStreak ?? 0,
+          longestStreak: finalUser.longestStreak ?? 0,
         };
         
         // IMPORTANT: Always save tasks with their completed state
@@ -3303,45 +3277,11 @@ export default function HypeOSPage() {
     const allTasksCompleted = updatedTasks.every(t => t.completed);
     
     if (allTasksCompleted) {
-      // Update streak - if current streak is 0 or 1, maintain or increment it
-      let updatedStreakData: StreakData;
-      if (finalUser.currentStreak === 0) {
-        // First time completing all tasks - start streak at 1
-        updatedStreakData = {
-          ...streakData,
-          currentStreak: 1,
-          longestStreak: Math.max(1, user.longestStreak || 0),
-          lastActiveDate: new Date(),
-          streakStartDate: new Date(),
-          totalDaysActive: 1
-        };
-      } else if (finalUser.currentStreak === 1) {
-        // Already at 1 day streak (from completing first task), increment for completing all tasks
-        // But actually, if it's the same day, keep it at 1
-        // Only increment if it's a new day
-        updatedStreakData = updateStreak({
-          ...streakData,
-          currentStreak: finalUser.currentStreak,
-          longestStreak: finalUser.longestStreak
-        });
-      } else {
-        // Update existing streak (2+ days)
-        updatedStreakData = updateStreak({
-          ...streakData,
-          currentStreak: finalUser.currentStreak,
-          longestStreak: finalUser.longestStreak
-        });
-      }
-      
       const userWithUpdatedStreak = {
         ...finalUser,
-        currentStreak: updatedStreakData.currentStreak,
-        longestStreak: updatedStreakData.longestStreak,
-        lastActiveDate: updatedStreakData.lastActiveDate.toISOString(),
-        streakStartDate: updatedStreakData.streakStartDate.toISOString(),
-        goalProgress: 100 // All tasks completed = 100% progress
+        goalProgress: 100,
       };
-      
+
       setUser(userWithUpdatedStreak);
       
       // Immediately save the updated streak
@@ -3383,11 +3323,11 @@ export default function HypeOSPage() {
       setShowStreakCelebration(true);
       
       // Phase 5: Show streak milestone celebration
-      if (updatedStreakData.currentStreak % 7 === 0 || updatedStreakData.currentStreak === 30) {
+      if (userWithUpdatedStreak.currentStreak % 7 === 0 || userWithUpdatedStreak.currentStreak === 30) {
         setTimeout(() => {
           setCelebration({
             type: 'streak-milestone',
-            message: `${updatedStreakData.currentStreak} day streak! Incredible consistency!`
+            message: `${userWithUpdatedStreak.currentStreak} day streak! Incredible consistency!`
           });
         }, 500);
       }
@@ -3826,7 +3766,7 @@ export default function HypeOSPage() {
 
   return (
     <div
-      className={`hypeos-page min-h-screen ${viewMode === 'path' ? 'bg-[#0a0f12]' : 'bg-white dark:bg-slate-950'}`}
+      className={`hypeos-page min-h-screen ${viewMode === 'path' ? 'bg-white dark:bg-[#0a0f12]' : 'bg-white dark:bg-slate-950'}`}
       style={
         viewMode === 'path'
           ? { overflow: 'hidden', height: '100vh' }
@@ -3919,8 +3859,8 @@ export default function HypeOSPage() {
 
       {user && user.goalTitle && viewMode === 'path' ? (
         !skillTree ? (
-          <div className="flex min-h-screen items-center justify-center bg-[#0a0f12]">
-            <p className="text-sm text-white/40">Loading your skill path…</p>
+          <div className="flex min-h-screen items-center justify-center bg-white dark:bg-[#0a0f12]">
+            <p className="text-sm text-slate-500 dark:text-white/40">Loading your skill path…</p>
           </div>
         ) : (
           <LearnShell

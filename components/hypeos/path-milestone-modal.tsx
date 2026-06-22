@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Check, Clock, Flame, Star, Lock } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { vq } from '@/lib/hypeos/path-ui-theme'
 import type { PathMilestone } from '@/lib/hypeos/skill-path-milestones'
 import type { Skill } from '@/lib/hypeos/skill-tree'
 
@@ -44,22 +46,25 @@ export default function PathMilestoneModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="fixed top-[max(1rem,3vh)] left-[50%] flex max-h-[min(88vh,calc(100vh-2rem))] w-full max-w-[calc(100%-1.5rem)] translate-x-[-50%] translate-y-0 flex-col gap-0 overflow-hidden border-white/10 bg-[#0f1419] p-0 text-white sm:max-w-lg"
+        className={cn(
+          'fixed top-[max(1rem,3vh)] left-[50%] flex max-h-[min(88vh,calc(100vh-2rem))] w-full max-w-[calc(100%-1.5rem)] translate-x-[-50%] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-lg',
+          vq.modal
+        )}
       >
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-4">
           <DialogHeader>
             <p className="text-[10px] font-medium uppercase tracking-widest text-[#39d2c0]/80">
               {skill.name}
             </p>
-            <DialogTitle className="text-left text-lg font-medium text-white">
+            <DialogTitle className={cn('text-left text-lg font-medium', vq.heading)}>
               {milestone.label}
             </DialogTitle>
-            <DialogDescription className="text-left text-sm text-white/55">
+            <DialogDescription className={cn('text-left text-sm', vq.muted)}>
               {milestone.description}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 flex flex-wrap gap-3 text-xs text-white/45">
+          <div className={cn('mt-4 flex flex-wrap gap-3 text-xs', vq.muted)}>
             {milestone.estimatedTime && (
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
@@ -73,7 +78,7 @@ export default function PathMilestoneModal({
               </span>
             )}
             {currentStreak > 0 && (
-              <span className="inline-flex items-center gap-1 text-orange-400">
+              <span className="inline-flex items-center gap-1 text-orange-500 dark:text-orange-400">
                 <Flame className="h-3.5 w-3.5" />
                 {currentStreak} day streak
               </span>
@@ -82,16 +87,16 @@ export default function PathMilestoneModal({
 
           {visibleSteps.length > 0 && (
             <div className="mt-4 space-y-2">
-              <p className="text-[10px] font-medium uppercase tracking-widest text-white/35">
+              <p className={cn('text-[10px] font-medium uppercase tracking-widest', vq.mutedFaint)}>
                 How to complete
               </p>
-              <ol className="list-decimal space-y-2 pl-4 text-sm text-white/70">
+              <ol className={cn('list-decimal space-y-2 pl-4 text-sm', vq.body)}>
                 {visibleSteps.map((step, i) => (
                   <li key={i}>{step}</li>
                 ))}
               </ol>
               {hiddenStepCount > 0 && (
-                <p className="text-xs text-white/40">
+                <p className={cn('text-xs', vq.mutedFaint)}>
                   +{hiddenStepCount} more tip{hiddenStepCount === 1 ? '' : 's'} in Bizora
                   or daily focus
                 </p>
@@ -107,17 +112,23 @@ export default function PathMilestoneModal({
           )}
 
           {!milestone.completed && !milestone.isNext && !milestone.locked && (
-            <p className="mt-4 text-xs text-white/40">
+            <p className={cn('mt-4 text-xs', vq.mutedFaint)}>
               Finish the previous step on your path first, then come back to this one.
             </p>
           )}
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-white/10 bg-[#0f1419] px-6 py-4 sm:justify-end">
+        <DialogFooter
+          className={cn(
+            'shrink-0 gap-2 border-t px-6 py-4 sm:justify-end',
+            vq.border,
+            vq.surface
+          )}
+        >
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}
-            className="text-white/60 hover:text-white"
+            className="text-slate-600 hover:text-slate-900 dark:text-white/60 dark:hover:text-white"
           >
             Close
           </Button>
@@ -127,13 +138,16 @@ export default function PathMilestoneModal({
                 onComplete()
                 onOpenChange(false)
               }}
-              className="bg-[#39d2c0] text-[#0a0f12] hover:bg-[#39d2c0]/90"
+              className={vq.accentBtn}
             >
               <Check className="mr-2 h-4 w-4" />
               Mark complete
             </Button>
           ) : !milestone.completed && milestone.locked ? (
-            <Button disabled className="bg-white/5 text-white/30">
+            <Button
+              disabled
+              className="bg-gray-100 text-slate-400 dark:bg-white/5 dark:text-white/30"
+            >
               <Lock className="mr-2 h-4 w-4" />
               Locked
             </Button>

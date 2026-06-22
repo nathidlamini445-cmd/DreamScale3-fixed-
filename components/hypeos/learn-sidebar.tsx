@@ -10,6 +10,7 @@ import {
   Home,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { vq } from '@/lib/hypeos/path-ui-theme'
 
 type NavId = 'learn' | 'practice' | 'quests' | 'rewards' | 'progress'
 
@@ -49,14 +50,20 @@ export default function LearnSidebar({
   }
 
   return (
-    <aside className="hidden w-[220px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0f12] lg:flex">
+    <aside
+      className={cn(
+        'hidden w-[220px] shrink-0 flex-col border-r lg:flex',
+        vq.surface,
+        vq.border
+      )}
+    >
       <div className="px-5 py-6">
-        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#39d2c0]/70">
+        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#39d2c0]/80">
           Venture Quest
         </p>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-3">
+      <nav data-hypeos-nav className="flex flex-1 flex-col gap-0.5 px-3">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const isActive = item.id === 'learn' && active === 'learn'
@@ -68,8 +75,8 @@ export default function LearnSidebar({
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
                 isActive
-                  ? 'bg-white/[0.06] font-medium text-white'
-                  : 'text-white/45 hover:bg-white/[0.03] hover:text-white/70'
+                  ? cn(vq.navActive)
+                  : cn(vq.navInactive, 'hover:bg-gray-50 dark:hover:bg-white/[0.03]')
               )}
             >
               <Icon className={cn('h-4 w-4 shrink-0', isActive && 'text-[#39d2c0]')} />

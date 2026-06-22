@@ -13,10 +13,10 @@ export async function POST(request: Request) {
   if (quotaGate.error) return quotaGate.error
 
   let data: QuestionnaireData | null = null
-
+  
   try {
     data = (await request.json()) as QuestionnaireData
-
+    
     if (!data || !data.intrapreneurName || !data.companyIndustry) {
       return NextResponse.json({ error: 'Required fields missing' }, { status: 400 })
     }
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: result.status ?? 400 })
     }
 
-    return NextResponse.json({
+        return NextResponse.json({ 
       analysis: result.analysis,
       ...(result.warning ? { warning: result.warning } : {}),
       ...(result.warningKind ? { warningKind: result.warningKind } : {}),

@@ -1119,28 +1119,26 @@ ol::-moz-selection {
   fill: #39d2c0 !important;
 }
 
-/* Force navigation to be light in light mode only */
-:not(.dark) nav {
+/* Force navigation to be light in light mode only — DreamScale horizontal nav + fixed app sidebar (not Venture Quest learn nav) */
+:not(.dark) nav.fixed.top-0.left-0.right-0.z-50,
+:not(.dark) aside.fixed > nav {
   background-color: white !important;
 }
 
-:not(.dark) nav * {
+:not(.dark) nav.fixed.top-0.left-0.right-0.z-50 *,
+:not(.dark) aside.fixed > nav * {
   color: inherit !important;
 }
 
 /* Force navigation to be dark in dark mode - ULTRA AGGRESSIVE */
-.dark nav,
-.dark nav.fixed,
-.dark nav.fixed.top-0,
-.dark nav.fixed.top-0.left-0.right-0.z-50 {
+.dark nav.fixed.top-0.left-0.right-0.z-50,
+.dark aside.fixed > nav {
   background-color: #111827 !important;
   background: #111827 !important;
 }
 
-.dark nav *,
-.dark nav.fixed *,
-.dark nav.fixed.top-0 *,
-.dark nav.fixed.top-0.left-0.right-0.z-50 * {
+.dark nav.fixed.top-0.left-0.right-0.z-50 *,
+.dark aside.fixed > nav * {
   color: inherit !important;
 }
 
@@ -1164,26 +1162,30 @@ ol::-moz-selection {
   color: inherit !important;
 }
 
-/* Force navigation items to be dark in dark mode - ULTRA AGGRESSIVE */
-.dark nav a:not(.bg-\[#39d2c0\]) {
+/* Force navigation items to be dark in dark mode - app sidebar + horizontal nav only */
+.dark aside.fixed > nav a:not(.bg-\[#39d2c0\]),
+.dark nav.fixed.top-0.left-0.right-0.z-50 a:not(.bg-\[#39d2c0\]) {
   background-color: #111827 !important;
   background: #111827 !important;
   color: #1e3a8a !important;
 }
-.dark nav a:not(.bg-\[#39d2c0\]):hover {
+.dark aside.fixed > nav a:not(.bg-\[#39d2c0\]):hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a:not(.bg-\[#39d2c0\]):hover {
   background-color: #1f2937 !important;
   background: #1f2937 !important;
   color: #1e40af !important;
 }
 
 /* Target specific Tailwind classes */
-.dark nav .bg-gray-50 {
+.dark aside.fixed > nav .bg-gray-50,
+.dark nav.fixed.top-0.left-0.right-0.z-50 .bg-gray-50 {
   background-color: #111827 !important;
   background: #111827 !important;
   color: #1e3a8a !important;
 }
 
-.dark nav .bg-gray-50:hover {
+.dark aside.fixed > nav .bg-gray-50:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 .bg-gray-50:hover {
   background-color: #1f2937 !important;
   background: #1f2937 !important;
 }
@@ -1200,34 +1202,50 @@ ol::-moz-selection {
   background: #1f2937 !important;
 }
 
-/* NUCLEAR OPTION - Override everything */
-.dark nav a[href*="/discover"],
-.dark nav a[href*="/hypeos"],
-.dark nav a[href*="/bizora"],
-.dark nav a[href*="/skilldrops"],
-.dark nav a[href*="/flowmatch"],
-.dark nav a[href*="/marketplace"],
-.dark nav a[href*="/dreampulse"] {
+/* NUCLEAR OPTION - Override everything (app nav links only) */
+.dark aside.fixed > nav a[href*="/discover"],
+.dark aside.fixed > nav a[href*="/hypeos"],
+.dark aside.fixed > nav a[href*="/bizora"],
+.dark aside.fixed > nav a[href*="/skilldrops"],
+.dark aside.fixed > nav a[href*="/flowmatch"],
+.dark aside.fixed > nav a[href*="/marketplace"],
+.dark aside.fixed > nav a[href*="/dreampulse"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/discover"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/hypeos"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/bizora"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/skilldrops"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/flowmatch"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/marketplace"],
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/dreampulse"] {
   background-color: #111827 !important;
   background: #111827 !important;
   color: #1e3a8a !important;
 }
 
-.dark nav a[href*="/discover"]:hover,
-.dark nav a[href*="/hypeos"]:hover,
-.dark nav a[href*="/bizora"]:hover,
-.dark nav a[href*="/skilldrops"]:hover,
-.dark nav a[href*="/flowmatch"]:hover,
-.dark nav a[href*="/marketplace"]:hover,
-.dark nav a[href*="/dreampulse"]:hover {
+.dark aside.fixed > nav a[href*="/discover"]:hover,
+.dark aside.fixed > nav a[href*="/hypeos"]:hover,
+.dark aside.fixed > nav a[href*="/bizora"]:hover,
+.dark aside.fixed > nav a[href*="/skilldrops"]:hover,
+.dark aside.fixed > nav a[href*="/flowmatch"]:hover,
+.dark aside.fixed > nav a[href*="/marketplace"]:hover,
+.dark aside.fixed > nav a[href*="/dreampulse"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/discover"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/hypeos"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/bizora"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/skilldrops"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/flowmatch"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/marketplace"]:hover,
+.dark nav.fixed.top-0.left-0.right-0.z-50 a[href*="/dreampulse"]:hover {
   background-color: #1f2937 !important;
   background: #1f2937 !important;
   color: #1e40af !important;
 }
 
 /* Ensure navigation items are light in light mode only */
-:not(.dark) nav .bg-gray-50,
-:not(.dark) nav .bg-blue-50 {
+:not(.dark) aside.fixed > nav .bg-gray-50,
+:not(.dark) aside.fixed > nav .bg-blue-50,
+:not(.dark) nav.fixed.top-0.left-0.right-0.z-50 .bg-gray-50,
+:not(.dark) nav.fixed.top-0.left-0.right-0.z-50 .bg-blue-50 {
   background-color: #f9fafb !important;
 }
 
@@ -1384,7 +1402,7 @@ body > *:not(aside.fixed) {
 main.pl-64,
 main[class*="pl-64"],
 main[class*="ml-64"],
-main[class*="flex-1"]:not([data-guest-main]) {
+main[class*="flex-1"]:not([data-guest-main]):not([data-hypeos-main]) {
   /* Main content scrolls independently */
   overflow-y: auto !important;
   overflow-x: hidden !important;
@@ -1448,6 +1466,31 @@ html[data-hypeos-page], body[data-hypeos-page] {
   overflow-y: auto !important;
   height: auto !important;
   min-height: 100vh !important;
+}
+
+/* Venture Quest uses its own LearnShell sidebar — never reserve DreamScale app sidebar space */
+html[data-hypeos-page] main,
+html[data-hypeos-page] main[class*="ml-64"],
+html[data-hypeos-page] main[class*="pl-64"],
+html[data-hypeos-page] main[class*="flex-1"] {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+html[data-hypeos-page] .page-transition {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100vh !important;
+}
+
+/* Venture Quest learn nav — don't inherit global horizontal-nav light overrides */
+:not(.dark) html[data-hypeos-page] [data-hypeos-shell] nav[data-hypeos-nav],
+:not(.dark) html[data-hypeos-page] [data-hypeos-shell] nav[data-hypeos-nav] * {
+  background-color: transparent !important;
+  color: unset !important;
 }
 
 /* Billing / plan comparison (no app sidebar) */

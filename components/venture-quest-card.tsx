@@ -4,6 +4,11 @@ import { Card } from "@/components/ui/card"
 import { Flame, Target, ArrowRight } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useSessionSafe } from "@/lib/session-context"
+import {
+  syncStreakOnLoad,
+  parseLastActiveDate,
+  daysSinceLastActiveMidnight,
+} from "@/lib/hypeos/streak-calculator"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -33,10 +38,16 @@ export function VentureQuestCard() {
         const sessionUser = sessionContext?.sessionData?.hypeos?.user
         
         if (sessionUser && sessionUser.goalTitle && sessionUser.hasCompletedOnboarding) {
-          // User has real onboarding data - use it
-          const userData = {
+          const syncedStreak = syncStreakOnLoad({
             currentStreak: sessionUser.currentStreak || 0,
             longestStreak: sessionUser.longestStreak || 0,
+            lastActiveDate: parseLastActiveDate(sessionUser.lastActiveDate),
+            streakStartDate: parseLastActiveDate(sessionUser.streakStartDate),
+            totalDaysActive: sessionUser.currentStreak || 0,
+          })
+          const userData = {
+            currentStreak: syncedStreak.currentStreak,
+            longestStreak: syncedStreak.longestStreak,
             lastActiveDate: sessionUser.lastActiveDate,
             goalTitle: sessionUser.goalTitle,
             goalTarget: sessionUser.goalTarget,
@@ -47,8 +58,8 @@ export function VentureQuestCard() {
           setUser(userData)
           console.log('📊 Loaded user data:', { goalTarget: userData.goalTarget, timeline: userData.timeline })
           calculateMessages({
-            currentStreak: sessionUser.currentStreak || 0,
-            longestStreak: sessionUser.longestStreak || 0,
+            currentStreak: syncedStreak.currentStreak,
+            longestStreak: syncedStreak.longestStreak,
             lastActiveDate: sessionUser.lastActiveDate,
             goalTitle: sessionUser.goalTitle,
             hypePoints: sessionUser.hypePoints || 0
@@ -65,17 +76,25 @@ export function VentureQuestCard() {
               parsed.goalTitle !== '10k a month' && 
               parsed.goalTitle !== 'Earn R10k/month' &&
               parsed.hasCompletedOnboarding) {
-            setUser({
+            const syncedStreak = syncStreakOnLoad({
               currentStreak: parsed.currentStreak || 0,
               longestStreak: parsed.longestStreak || 0,
+              lastActiveDate: parseLastActiveDate(parsed.lastActiveDate),
+              streakStartDate: parseLastActiveDate(parsed.streakStartDate),
+              totalDaysActive: parsed.currentStreak || 0,
+            })
+            const localUser = {
+              currentStreak: syncedStreak.currentStreak,
+              longestStreak: syncedStreak.longestStreak,
               lastActiveDate: parsed.lastActiveDate,
               goalTitle: parsed.goalTitle,
               goalTarget: parsed.goalTarget,
               timeline: parsed.timeline,
               hypePoints: parsed.hypePoints || 0,
               hasCompletedOnboarding: true
-            })
-            calculateMessages(parsed)
+            }
+            setUser(localUser)
+            calculateMessages(localUser)
             return
           }
         }
@@ -115,15 +134,12 @@ export function VentureQuestCard() {
       wasActiveToday = sameDay
     }
 
-    // Calculate days since last active
+    // Calendar-day gap since last real completion (not wall-clock hours)
     let daysSinceLastActive = 0
     if (userData.lastActiveDate) {
-      const lastActive = new Date(userData.lastActiveDate)
-      const today = new Date()
-      const daysDiff = Math.floor(
-        (today.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24)
+      daysSinceLastActive = daysSinceLastActiveMidnight(
+        parseLastActiveDate(userData.lastActiveDate)
       )
-      daysSinceLastActive = daysDiff
     }
 
     // Determine messages based on streak status and time

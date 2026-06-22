@@ -11,6 +11,7 @@ import LearnRightPanel from '@/components/hypeos/learn-right-panel'
 import SkillPathMap from '@/components/hypeos/skill-path-map'
 import PathMilestoneModal from '@/components/hypeos/path-milestone-modal'
 import { cn } from '@/lib/utils'
+import { vq } from '@/lib/hypeos/path-ui-theme'
 import type { Quest } from '@/lib/hypeos/quest-system'
 import type { Skill, SkillTree } from '@/lib/hypeos/skill-tree'
 import type { UserSkillStats } from '@/lib/hypeos/sync-skill-tree'
@@ -150,7 +151,7 @@ export default function LearnShell({
   ]
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0a0f12] text-white">
+    <div data-hypeos-shell className={cn('flex h-screen overflow-hidden', vq.shell)}>
       <LearnSidebar active="learn" onNavigate={handleNavigate} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -166,10 +167,11 @@ export default function LearnShell({
 
         <div className="flex min-h-0 flex-1">
           <main
+            data-hypeos-main
             ref={(el) => {
               scrollRef.current = el
             }}
-            className="min-w-0 flex-[1.75] overflow-y-auto px-4 py-6 sm:px-10 lg:px-14 lg:py-10"
+            className="min-w-0 grow-[1.75] basis-0 overflow-y-auto px-4 py-6 sm:px-10 lg:px-14 lg:py-10"
             style={{ overscrollBehavior: 'contain' }}
             onPointerDown={(e) => {
               // Drag-to-scroll (like grabbing a trackpad) for long paths.
@@ -233,7 +235,7 @@ export default function LearnShell({
                 <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#39d2c0]/70">
                   Up next
                 </p>
-                <p className="mt-1 text-sm text-white/85">{nextLabel}</p>
+                <p className={cn('mt-1 text-sm', vq.body)}>{nextLabel}</p>
                 <button
                   type="button"
                   onClick={handleContinuePath}
@@ -245,17 +247,21 @@ export default function LearnShell({
             )}
 
             {activeSkill && (
-              <div className="mt-6 space-y-3 border-t border-white/[0.06] pt-5 xl:hidden">
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">
+              <div className={cn('mt-6 space-y-3 border-t pt-5 xl:hidden', vq.border)}>
+                <p className={cn('text-[10px] font-medium uppercase tracking-[0.18em]', vq.mutedFaint)}>
                   Selected
                 </p>
-                <h3 className="text-sm font-medium text-white/90">{activeSkill.name}</h3>
-                <p className="text-xs text-white/45">{activeSkill.description}</p>
+                <h3 className={cn('text-sm font-medium', vq.body)}>{activeSkill.name}</h3>
+                <p className={cn('text-xs', vq.muted)}>{activeSkill.description}</p>
                 <button
                   type="button"
                   disabled={!activeSkill.unlocked || activeSkill.mastered}
                   onClick={handleContinuePath}
-                  className="h-9 w-full rounded-lg bg-[#39d2c0] text-sm font-medium text-[#0a0f12] disabled:bg-white/[0.04] disabled:text-white/30"
+                  className={cn(
+                    'h-9 w-full rounded-lg text-sm font-medium',
+                    vq.accentBtn,
+                    'disabled:bg-gray-100 disabled:text-slate-400 dark:disabled:bg-white/[0.04] dark:disabled:text-white/30'
+                  )}
                 >
                   {activeSkill.mastered
                     ? 'Completed'
@@ -266,20 +272,20 @@ export default function LearnShell({
               </div>
             )}
 
-            <div className="mt-6 border-t border-white/[0.06] pt-5 xl:hidden">
-              <h3 className="mb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">
+            <div className={cn('mt-6 border-t pt-5 xl:hidden', vq.border)}>
+              <h3 className={cn('mb-3 text-[10px] font-medium uppercase tracking-[0.18em]', vq.mutedFaint)}>
                 Daily quests
               </h3>
               <div className="space-y-3">
                 {quests.slice(0, 2).map((q) => (
                   <div key={q.id}>
-                    <div className="mb-1 flex justify-between text-xs text-white/45">
+                    <div className={cn('mb-1 flex justify-between text-xs', vq.muted)}>
                       <span>{q.title}</span>
                       <span>
                         {q.current}/{q.target}
                       </span>
                     </div>
-                    <div className="h-px bg-white/[0.06]">
+                    <div className={cn('h-px', vq.track)}>
                       <div
                         className="h-full bg-[#39d2c0]/60"
                         style={{
@@ -304,7 +310,10 @@ export default function LearnShell({
           />
         </div>
 
-        <nav className="flex border-t border-white/[0.06] bg-[#0a0f12] px-2 py-2 lg:hidden">
+        <nav
+          data-hypeos-nav
+          className={cn('flex border-t px-2 py-2 lg:hidden', vq.surface, vq.border)}
+        >
           {mobileNav.map((item) => {
             const Icon = item.icon
             const active = item.id === 'learn'
@@ -315,7 +324,7 @@ export default function LearnShell({
                 onClick={item.action}
                 className={cn(
                   'flex flex-1 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px]',
-                  active ? 'text-[#39d2c0]' : 'text-white/40'
+                  active ? 'text-[#39d2c0]' : vq.navInactive
                 )}
               >
                 <Icon className="h-4 w-4" />

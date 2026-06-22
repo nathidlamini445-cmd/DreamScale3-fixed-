@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { ChevronDown, Home, Plus, Target } from 'lucide-react'
 import { getLevelFromPoints } from '@/lib/hypeos/points-system'
+import { vq } from '@/lib/hypeos/path-ui-theme'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,11 +46,20 @@ export default function LearnStatsBar({
   const showGoalPicker = goals.length > 0 && onGoalSelect
 
   return (
-    <header className="flex items-center gap-4 border-b border-white/[0.06] bg-[#0a0f12] px-4 py-3 lg:px-6">
+    <header
+      className={cn(
+        'flex items-center gap-4 border-b px-4 py-3 lg:px-6',
+        vq.surface,
+        vq.border
+      )}
+    >
       <button
         type="button"
         onClick={() => router.push('/dashboard')}
-        className="flex shrink-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-sm text-white/70 transition-colors hover:border-[#39d2c0]/30 hover:bg-white/[0.05] hover:text-white"
+        className={cn(
+          'flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+          vq.chipBtn
+        )}
         title="Back to Home"
       >
         <Home className="h-4 w-4" />
@@ -60,42 +71,43 @@ export default function LearnStatsBar({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-left text-sm text-white/80 transition-colors hover:border-[#39d2c0]/30 hover:bg-white/[0.05]"
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-2 rounded-lg border px-3 py-1.5 text-left text-sm transition-colors',
+                vq.chipBtn
+              )}
             >
               <Target className="h-4 w-4 shrink-0 text-[#39d2c0]/80" />
               <span className="truncate">{goalTitle || 'Venture Quest'}</span>
-              <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-white/40" />
+              <ChevronDown className={cn('ml-auto h-4 w-4 shrink-0', vq.mutedFaint)} />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="w-72 border-white/10 bg-[#0f1419] text-white"
-          >
-            <DropdownMenuLabel className="text-xs text-white/50">
+          <DropdownMenuContent align="start" className={cn('w-72', vq.dropdown)}>
+            <DropdownMenuLabel className={cn('text-xs', vq.muted)}>
               {hasMultipleGoals ? 'Switch goal' : 'Your goal'}
             </DropdownMenuLabel>
             {goals.map((goal) => (
               <DropdownMenuItem
                 key={goal.id}
                 onClick={() => onGoalSelect?.(goal.id)}
-                className={`cursor-pointer gap-2 ${
+                className={cn(
+                  'cursor-pointer gap-2',
                   goal.isActive
-                    ? 'bg-white/[0.08] text-white focus:bg-white/[0.1] focus:text-white'
-                    : 'text-white/70 focus:bg-white/[0.06] focus:text-white'
-                }`}
+                    ? 'bg-gray-100 text-slate-900 focus:bg-gray-100 focus:text-slate-900 dark:bg-white/[0.08] dark:text-white dark:focus:bg-white/[0.1] dark:focus:text-white'
+                    : 'text-slate-600 focus:bg-gray-50 focus:text-slate-900 dark:text-white/70 dark:focus:bg-white/[0.06] dark:focus:text-white'
+                )}
               >
                 <span className="min-w-0 flex-1 truncate">{goal.title}</span>
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-white/40">
+                <span className={cn('shrink-0 text-[10px] uppercase tracking-wide', vq.mutedFaint)}>
                   {goal.category}
                 </span>
               </DropdownMenuItem>
             ))}
             {canAddGoal && onNewGoal && (
               <>
-                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuSeparator className="bg-gray-200 dark:bg-white/10" />
                 <DropdownMenuItem
                   onClick={onNewGoal}
-                  className="cursor-pointer gap-2 text-[#39d2c0] focus:bg-white/[0.06] focus:text-[#39d2c0]"
+                  className="cursor-pointer gap-2 text-[#39d2c0] focus:bg-gray-50 focus:text-[#39d2c0] dark:focus:bg-white/[0.06] dark:focus:text-[#39d2c0]"
                 >
                   <Plus className="h-4 w-4" />
                   New goal
@@ -105,22 +117,22 @@ export default function LearnStatsBar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <p className="min-w-0 flex-1 truncate text-sm text-white/50">
+        <p className={cn('min-w-0 flex-1 truncate text-sm', vq.muted)}>
           {goalTitle || 'Venture Quest'}
         </p>
       )}
 
-      <div className="flex shrink-0 items-center gap-5 text-xs text-white/40">
+      <div className={cn('flex shrink-0 items-center gap-5 text-xs', vq.mutedFaint)}>
         <span>
-          <span className="text-white/70">{streak}</span> day streak
+          <span className={cn(vq.body)}>{streak}</span> day streak
         </span>
         <span className="hidden sm:inline">·</span>
         <span className="hidden sm:inline">
-          <span className="text-white/70">{points}</span> pts
+          <span className={cn(vq.body)}>{points}</span> pts
         </span>
         <span className="hidden md:inline">·</span>
         <span className="hidden md:inline">
-          Level <span className="text-white/70">{level}</span>
+          Level <span className={cn(vq.body)}>{level}</span>
         </span>
       </div>
     </header>

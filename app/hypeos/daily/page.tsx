@@ -9,7 +9,13 @@ import StreakCelebration from '@/components/hypeos/streak-celebration';
 import { UsageLimitModal } from '@/components/usage-limit-modal';
 import { ArrowLeft } from 'lucide-react';
 import { useSessionSafe } from '@/lib/session-context';
-import { updateStreak, buildWeeklyProgress, type StreakData } from '@/lib/hypeos/streak-calculator';
+import {
+  applyTodayActivityToStreak,
+  syncStreakOnLoad,
+  parseLastActiveDate,
+  buildWeeklyProgress,
+  type StreakData,
+} from '@/lib/hypeos/streak-calculator';
 import { useSubscriptionStatus } from '@/hooks/use-subscription-status';
 import { useUsageQuota } from '@/hooks/use-usage-quota';
 import {
@@ -118,8 +124,8 @@ export default function DailyFocusPage() {
   const [tasks, setTasks] = useState(mockTasks.map(t => ({ ...t, completed: false })));
   const [miniWins, setMiniWins] = useState(mockMiniWins.map(w => ({ ...w, completed: false })));
   const [userPoints, setUserPoints] = useState(2450);
-  const [currentStreak, setCurrentStreak] = useState(12);
-  const [longestStreak, setLongestStreak] = useState(12);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
   const [weeklyProgress, setWeeklyProgress] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [showStreakCelebration, setShowStreakCelebration] = useState(false);
   const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false);
@@ -257,28 +263,61 @@ export default function DailyFocusPage() {
         }
       }
       
-      // Load streak
-      const savedStreak = localStorage.getItem('hypeos:daily:currentStreak');
-      if (savedStreak) {
-        const streak = parseInt(savedStreak, 10);
-        if (!isNaN(streak)) {
-          setCurrentStreak(streak);
-          loadedAnyData = true;
-          console.log('✅ Loaded streak from localStorage:', streak);
+      // Load streak from session (source of truth), then local fallback — always sync calendar-day rules
+      const sessionUser = sessionContext?.sessionData?.hypeos?.user;
+      const lastActiveRaw =
+        sessionUser?.lastActiveDate ||
+        localStorage.getItem('hypeos:daily:lastActiveDate');
+
+      let streakFromSession = sessionUser?.currentStreak;
+      let longestFromSession = sessionUser?.longestStreak;
+
+      if (streakFromSession == null) {
+        const savedStreak = localStorage.getItem('hypeos:daily:currentStreak');
+        if (savedStreak) {
+          const streak = parseInt(savedStreak, 10);
+          if (!isNaN(streak)) streakFromSession = streak;
         }
       }
 
-      const savedLongestStreak = localStorage.getItem('hypeos:daily:longestStreak');
-      if (savedLongestStreak) {
-        const longest = parseInt(savedLongestStreak, 10);
-        if (!isNaN(longest)) {
-          setLongestStreak(longest);
+      if (longestFromSession == null) {
+        const savedLongestStreak = localStorage.getItem('hypeos:daily:longestStreak');
+        if (savedLongestStreak) {
+          const longest = parseInt(savedLongestStreak, 10);
+          if (!isNaN(longest)) longestFromSession = longest;
         }
-      } else {
-        const sessionUser = sessionContext?.sessionData?.hypeos?.user;
-        if (sessionUser?.longestStreak) {
-          setLongestStreak(sessionUser.longestStreak);
-        }
+      }
+
+      const syncedStreak = syncStreakOnLoad({
+        currentStreak: streakFromSession ?? 0,
+        longestStreak: longestFromSession ?? 0,
+        lastActiveDate: parseLastActiveDate(lastActiveRaw),
+        streakStartDate: parseLastActiveDate(
+          sessionUser?.streakStartDate || lastActiveRaw
+        ),
+        totalDaysActive: streakFromSession ?? 0,
+      });
+
+      setCurrentStreak(syncedStreak.currentStreak);
+      setLongestStreak(syncedStreak.longestStreak);
+      setWeeklyProgress(buildWeeklyProgress(syncedStreak.currentStreak, false));
+      if (syncedStreak.currentStreak > 0 || streakFromSession != null) {
+        loadedAnyData = true;
+        console.log('✅ Loaded streak (synced):', syncedStreak.currentStreak);
+      }
+
+      if (
+        sessionContext?.updateHypeOSData &&
+        sessionUser &&
+        syncedStreak.currentStreak !== (sessionUser.currentStreak ?? 0)
+      ) {
+        sessionContext.updateHypeOSData({
+          user: {
+            ...sessionUser,
+            currentStreak: syncedStreak.currentStreak,
+            longestStreak: syncedStreak.longestStreak,
+          },
+        });
       }
       
       // Load user goal data from session context (preferred) or localStorage
@@ -419,30 +458,19 @@ export default function DailyFocusPage() {
     celebrationShownRef.current = true;
     localStorage.setItem(celebrationKey, 'shown');
 
-    const lastActiveRaw = localStorage.getItem('hypeos:daily:lastActiveDate');
-    const lastActive = lastActiveRaw ? new Date(lastActiveRaw) : new Date(0);
+    const lastActiveRaw =
+      sessionContext?.sessionData?.hypeos?.user?.lastActiveDate ||
+      localStorage.getItem('hypeos:daily:lastActiveDate');
 
-    const streakData: StreakData = {
+    const streakData = syncStreakOnLoad({
       currentStreak,
       longestStreak,
-      lastActiveDate: lastActive,
-      streakStartDate: lastActive,
+      lastActiveDate: parseLastActiveDate(lastActiveRaw),
+      streakStartDate: parseLastActiveDate(lastActiveRaw),
       totalDaysActive: currentStreak,
-    };
+    });
 
-    let updatedStreakData: StreakData;
-    if (currentStreak === 0) {
-      updatedStreakData = {
-        ...streakData,
-        currentStreak: 1,
-        longestStreak: Math.max(1, longestStreak),
-        lastActiveDate: new Date(),
-        streakStartDate: new Date(),
-        totalDaysActive: 1,
-      };
-    } else {
-      updatedStreakData = updateStreak(streakData, new Date());
-    }
+    const updatedStreakData = applyTodayActivityToStreak(streakData);
 
     setCurrentStreak(updatedStreakData.currentStreak);
     setLongestStreak(updatedStreakData.longestStreak);
